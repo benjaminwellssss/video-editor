@@ -1,0 +1,6 @@
+projects/*/raw/
+projects/*/outputs/
+node_modules/
+*.log
+vendor/*/
+*.m4a
