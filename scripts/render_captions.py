@@ -341,7 +341,7 @@ def main():
         card = current_card(primary_cards, ci_state, "primary", t) if primary_cards else None
         if card is not None:
             progress = ease_out_back(min(1.0, (t - card["start"]) / POP_DURATION))
-            scale = 0.55 + 0.45 * progress
+            scale = (0.55 + 0.45 * progress) * card.get("emphasis_scale", 1.0)
             block, top_center_y, bottom_edge_y = compose_card(card, t, PRIMARY_STYLE, cache)
             nw = max(1, int(block.width * scale))
             nh = max(1, int(block.height * scale))

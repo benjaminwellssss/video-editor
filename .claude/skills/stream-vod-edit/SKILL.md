@@ -49,6 +49,40 @@ a new VOD job.
    the user to see, send it with `SendUserFile` rather than leaving it on
    disk at the project root.
 
+## Pre-build checklist (before touching `create_timeline_from_clips` on any new job)
+
+Run these in order, every time, before building the main cut. Each one has
+independently cost a full rebuild when skipped — doing them upfront is
+cheaper than diagnosing the symptom later.
+
+1. **Frame rate**: compare the media pool clip's real `FPS`
+   (`media_pool_item.get_clip_property`) against
+   `project_settings.get_setting("timelineFrameRate")`. Must match before
+   building anything — see "Resolve free-edition limitations" below for the
+   two failure modes and the fix.
+2. **Audio track**: confirmed with the user per "Audio track identification"
+   below — never guess.
+3. **Long-edit scope, in one round**: ask (or infer from what's already been
+   told) the selection criteria (funny highlights vs. "interesting"
+   progress/discovery) *and* the length ceiling *and* whether shorts are
+   wanted, together, before cutting anything — not as separate follow-ups
+   after a first attempt turns out to be the wrong shape. Default assumption
+   absent other instruction: curated funny highlights, ceiling 20-40 min
+   (see "Respect a stated length as a ceiling" below) — but a session with
+   little banter may warrant asking instead of assuming.
+4. **Structure plan**: identify the real spoken intro and outro in the
+   transcript, and pick a cold-open moment, *before* building — see
+   "Structure & hook convention" below. Finding these after a timeline is
+   already built means rebuilding it; finding them first means one build.
+5. **Large `clip_infos` builds** (roughly 50+ entries): use
+   `scripts/resolve_build_timeline.py <clip_infos.json> "<timeline name>"
+   [if_exists]` instead of the MCP tool's inline `clip_infos` parameter —
+   it drives the same `CreateEmptyTimeline`+`AppendToTimeline` calls directly
+   over the bridge from a JSON file, so a 261-entry (or 900+-entry) cut list
+   never has to be pasted into the conversation. Keep using the MCP tool
+   directly for small builds (shorts, a handful of clips) where the inline
+   form is simpler.
+
 ## File destinations
 
 Everything lives under `E:\Streaming\Videos\`, which has four subfolders:
@@ -199,6 +233,50 @@ The reliable process:
   older recording with none), fall back to scanning the transcript for
   funny moments directly (laughter cues, punchlines, chat reacting strongly,
   running bits) the way this pipeline has been doing.
+  **Confirmed working end-to-end 2026-09-15** (test file
+  `2026-09-15 14-37-42.mp4`, OBS Studio 32.2.2): OBS's "Add Chapter Marker"
+  hotkey writes real MP4 chapter atoms directly into the recording — no
+  sidecar file, no separate export step. Read them with
+  `ffprobe -v error -show_chapters -of json <file>`; each shows up as
+  `{"start_time", "tags": {"title"}}`. The very first chapter is always
+  titled **"Start"** at `start_time: 0` and is auto-added by OBS at
+  recording start — it is not a user mark, skip it. Unnamed marks come back
+  as "Unnamed 1", "Unnamed 2", etc. in press order; if the user names a
+  marker live, that name lands in `title` instead. **How to apply:** for
+  any new VOD, run the ffprobe chapter check first, before falling back to
+  transcript scanning — treat every non-"Start" chapter's timestamp as a
+  candidate-moment center, then read the surrounding transcript window to
+  understand and clip the actual bit.
+  **Marker naming = category.** The user's markers are for **funny moment
+  edits** (short-form candidates) — treat a marker's `title` as its category
+  label when present. For now that means every non-"Start" chapter is a
+  funny-moment/shorts candidate by default (whether left as "Unnamed N" or
+  named), since that's the only category in use. If the user starts naming
+  markers something else on stream (e.g. a distinct tag for a main-cut
+  highlight, a boss-fight/set-piece beat, etc.), treat that as a new
+  category rather than assuming every marker still means "funny moment" —
+  ask if it's ambiguous which bucket a newly-seen marker name belongs to.
+- **Always present the candidate list before building any shorts — don't
+  spend compute/render time on picks the user hasn't seen.** Confirmed as
+  the right process after a batch of 6 shorts built blind (no candidate
+  review first) mostly missed the mark ("almost none of the ones you
+  selected earlier were good enough to use") — a second pass that listed 10
+  candidates with actual quoted lines and approximate timestamps *before*
+  compositing anything got a clean per-item yes/no back, at zero wasted
+  render cost on the rejected ones. This is a narrow, intentional exception
+  to non-negotiable #4 ("don't ask should I proceed") — it's not a
+  stop-and-ask-permission gate, it's a cheap list-then-build checkpoint
+  specifically for shorts selection, same spirit as CLAUDE.md's "show the
+  cut list before building" for the main cut.
+  **How to apply:** For every batch of shorts, first list each candidate as
+  a short quoted excerpt (not a vague description — the actual funny line)
+  with its approximate raw-timestamp range and a one-line reason it's
+  self-contained, then wait for the user to accept/reject/swap individual
+  items by number before touching ffmpeg. Flag borderline-content picks
+  (innuendo, edgy topics short of the cut-scene tiers in
+  [[feedback-content-moderation]]) explicitly in the list so the user can
+  drop them without having to ask why. Only build the ones actually
+  approved.
 - **Shorts are conditional on being funny enough — not every job wants
   shorts by default.** When the job is "grab 3-5 clips if there are any
   funny moments," it's fine to come back with fewer than 3 (or zero) if the
@@ -338,16 +416,32 @@ natural visual boundary between the two halves.
   correct. This is *why* vertical shorts are composited in ffmpeg instead of
   as a second track inside Resolve.
 - **A new/existing project's `timelineFrameRate` can silently be 24 while the
-  source footage is 30fps.** The bug is invisible until render:
-  `create_timeline_from_clips` accepts the frame math and reports the
-  correct frame count back via `get_end_frame`/`get_start_frame` (no drift
-  shown at the API level), but the actual rendered file plays at the wrong
-  real-world duration — a 24-vs-30 mismatch inflates it by exactly 1.25x
-  (confirmed via `render.verify_output`'s `duration_ratio`), which is
-  slow-motion video with correspondingly detuned/slowed audio, not just a
-  metadata tag issue. **Check this before building anything**: read the
-  clip's real FPS via `media_pool_item.get_clip_property`, then immediately
-  compare against `project_settings.get_setting("timelineFrameRate")`.
+  source footage is 30fps.** **Check this before building anything, as the
+  literal first step of any new job**: read the clip's real FPS via
+  `media_pool_item.get_clip_property`, then immediately compare against
+  `project_settings.get_setting("timelineFrameRate")`. Don't wait to
+  discover this from a bad render or a gap-riddled timeline — it's a 10-
+  second check that has cost multiple full timeline rebuilds when skipped.
+  - **Two distinct failure signatures have been observed from the same root
+    cause, and which one you get is not predictable in advance**: (a) the
+    frame count reads back correct via `get_end_frame`/`get_start_frame` (no
+    drift shown at the API level) but the rendered file plays at the wrong
+    real-world duration — a 24-vs-30 mismatch inflates it by exactly 1.25x
+    (confirmed via `render.verify_output`'s `duration_ratio`), slow-motion
+    video with detuned/slowed audio; **or** (b) `AppendToTimeline` silently
+    truncates every clip to exactly 24/30 (0.8x, floor-rounded) of its
+    requested length and stitches a gap into the remainder — confirmed via
+    `timeline.detect_gaps_overlaps` showing hundreds of gaps whose durations
+    exactly equal each clip's `designed_length - floor(designed_length*0.8)`.
+    Signature (b) is worse because the *content* is wrong (missing frames,
+    not just mistimed), and the top-level `get_end_frame`/`get_start_frame`
+    duration can land close to the intended total by coincidence (gaps
+    roughly backfilling the truncated frames), which makes it look
+    deceptively close to correct unless you specifically check
+    `detect_gaps_overlaps` or the per-item durations from
+    `timeline.get_items_in_track`. **Either way, the fix is the same: don't
+    try to diagnose the symptom, just check `timelineFrameRate` vs the
+    clip's real `FPS` before building, full stop.**
   - **The fix: `project_settings.set_setting("timelineFrameRate", "30")`
     DOES work via the API — but only while the project has zero timelines.**
     Confirmed both ways on this rig: it silently fails (`success: false`,
@@ -355,11 +449,16 @@ natural visual boundary between the two halves.
     already has timelines/clips in it, but succeeds cleanly (readback
     confirms) on a brand-new project before anything's been added — check
     `timeline.list` returns `[]` first. If the project already has
-    timelines, there is no known API fix; a Resolve GUI attempt to change it
-    may also refuse/grey out once media exists, so the reliable path is
-    asking the user to open a fresh, still-empty project (Project Manager →
-    new project, don't open/import anything into it yet) and setting the
-    rate there before any timeline is built.
+    timelines, there is no known API fix — confirmed again 2026-09-16, three
+    separate `set_setting` attempts (string "30", int 30, "30.000") all
+    returned `success: false` on a project with existing timelines. A
+    Resolve GUI attempt to change it may also refuse/grey out once media
+    exists, so the reliable path is asking the user to open a fresh,
+    still-empty project (Project Manager → new project, don't open/import
+    anything into it yet) and setting the rate there before any timeline is
+    built. **Don't spend more than one retry on `set_setting` once a project
+    has timelines — it does not work, go straight to asking for a fresh
+    project instead of re-trying value formats.**
   - `timelinePlaybackFrameRate` is a **separate, genuinely unwritable**
     setting — `SetSetting` returns `False` for every value/type tried,
     before or after a timeline exists (this is a known upstream limitation,
@@ -680,6 +779,89 @@ burned-in or soft captions there too). Current spec, confirmed by the user:
     a real possibility, confirm before assuming multi-speaker), diarization
     still runs but naturally produces one dominant speaker and an empty (or
     near-empty) secondary list, which is correct, not a bug.
+  - **Diarization is very slow on this rig for a full-length VOD — budget
+    hours, not minutes, and confirm the user actually wants to wait before
+    committing to it on a long file.** Confirmed 2026-09-15 on a 4h51m
+    recording: WhisperX ASR+alignment alone took ~3h19m, and diarization
+    (pyannote, loaded *after* ASR finishes — same process, no incremental
+    checkpoint in `transcribe_diarized.py`) was still running almost 2 hours
+    later when the user killed it and asked for a normal single-speaker
+    transcript instead. **Because there's no checkpoint between the ASR
+    pass and the diarization pass, killing the job partway through loses
+    the already-completed ASR work too** — the fallback isn't "resume from
+    where it stopped," it's "start over with plain `transcribe.py`."
+    **How to apply:** before kicking off `transcribe_diarized.py` on a VOD
+    of stream length (multiple hours), tell the user roughly how long it's
+    likely to take (ASR real-time-factor on this rig is roughly 0.7x the
+    source duration, so a ~5h file is a ~3.5h ASR pass before diarization
+    even starts) rather than just launching it silently in the background —
+    multi-speaker captions are valuable but not worth hours of surprise
+    wait time on a job that could've used plain `transcribe.py` (much
+    faster, same ASR pass, no diarization stage) if the user would rather
+    trade speaker-differentiated captions for turnaround time.
+
+### Long-edit SRT captions
+
+- **Build with `scripts/build_srt_multi_source.py`**, feeding it
+  `timeline.source_range_report`'s `occurrences` list (matches the script's
+  expected shape directly — no reformatting needed) plus the source's
+  `words.json`. It word-maps through the actual cut, not the raw VOD
+  timeline, and (as of 2026-09-16) forces a subtitle break at every clip
+  boundary in addition to its gap/duration heuristics — **this fix matters**:
+  when two unrelated clips are spliced back-to-back with zero gap (the
+  normal case for a jump-cut edit), naive gap-only chunking merges their
+  text into one nonsense caption (confirmed case: "Wow, this dump chest
+  music is awesome. and I believe we are live." — two different moments,
+  spliced). It also clamps word boundaries to the clip's actual frame range
+  (≥50% of the word's duration must survive the cut) rather than requiring
+  full containment, so a word that's mostly-but-not-entirely inside a clip
+  still gets captioned instead of silently dropped at the cut point.
+- **ASR reliably garbles sung, chanted, or exaggerated/performative speech**
+  — WhisperX transcribes drunk karaoke, crowd chants, or bit-voices as
+  confident-sounding nonsense rather than flagging low confidence (e.g.
+  "muy bien, muy bien" transcribed as "Very good, very good!"; a triple
+  "bah bah bah" transcribed as the single word "Baba."). This is not
+  occasional — check the transcript against the actual audio for **any**
+  segment the cut list or OBS markers describe as singing/karaoke/chanting/a
+  bit, in every deliverable that includes it (a short AND the long edit both
+  need the check independently if they overlap the same footage — fixing it
+  in one does not fix the other). Same for a misheard proper noun/meme
+  reference the user has already corrected once elsewhere in the same job
+  (e.g. "Bride wife" → "Ride wife") — grep the full SRT for the wrong form,
+  it's likely to recur anywhere that footage repeats (a cold-open teaser and
+  its later chronological occurrence are two separate ASR passes over the
+  same words and can be transcribed differently each time).
+- Hand-correcting a caption line: match on the exact
+  `HH:MM:SS,mmm --> HH:MM:SS,mmm\n<old text>` block (unique per cue) and
+  replace in place — don't regenerate the whole file for a handful of fixes.
+
+### Deliverable bundle: export + captions + metadata
+
+When asked to "export," "prep for upload," or similar for a finished
+`EDITS`-tier timeline, that means all of the following together, not just
+the video file — do them in one pass rather than waiting to be asked for
+each:
+
+1. Render the timeline (`render.set_format_and_codec` mp4/H264,
+   `render.set_settings` with `TargetDir`/`CustomName` pointed at the dated
+   `EDITS` batch folder, `add_job` + `start`). **Verify with
+   `render.verify_output`, not just `get_job_status` — a `CompletionPercentage`
+   read shortly after `start` can show single digits with an
+   `EstimatedTimeRemainingInMs` in the tens of minutes; don't treat a
+   file that already exists on disk mid-render as finished (see
+   Non-negotiable 4a — the same "looks done but isn't" trap applies to
+   Resolve's own render, not just ffmpeg).**
+2. Build the `.srt` per "Long-edit SRT captions" above, including the
+   ASR-garble spot-check, saved alongside the video in the same dated
+   `EDITS` folder.
+3. Write the `*_metadata.txt` deliverable (TITLE/DESCRIPTION/TAGS, and a
+   CHAPTERS block with `record_frame/fps` timestamps for every structural
+   beat if the cut list has named scenes) in the same folder, matching the
+   existing file's format exactly — see an existing `*_metadata.txt` in a
+   prior batch folder for the template rather than inventing a new shape.
+   Apply the episode-numbering offset (see
+   [[project-valheim-episode-numbering]]-style memory for this series) to
+   the TITLE if one is in effect for the job.
 
 ### Profanity → caption emoji substitution
 
