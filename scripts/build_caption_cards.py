@@ -111,6 +111,31 @@ def words_to_cards(words):
     return cards
 
 
+def words_to_cards_single(words):
+    """One word per card, shown exactly while it's being spoken (plus the
+    same small early LEAD_S already used for the grouped style). No 'words'
+    key — that key only exists to drive the karaoke active-word highlight,
+    which is meaningless when the whole card is already one word; omitting
+    it keeps render_captions.py's plain-white path (no green tint)."""
+    cards = []
+    n = len(words)
+    for i, w in enumerate(words):
+        start = w["start"]
+        end = w["end"] + 0.12
+        if i + 1 < n:
+            end = min(end, words[i + 1]["start"])
+        end = max(end, start + 0.15)
+        cards.append({"start": start, "end": end, "lines": [w["text"]]})
+
+    for idx, card in enumerate(cards):
+        new_start = card["start"] - LEAD_S
+        if idx > 0:
+            new_start = max(new_start, cards[idx - 1]["end"])
+        card["start"] = max(0.0, new_start)
+
+    return cards
+
+
 def main():
     name, out_path = sys.argv[1], sys.argv[2]
     shorts_dir = sys.argv[3] if len(sys.argv) > 3 else SHORTS_DIR

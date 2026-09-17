@@ -4,3 +4,5 @@ node_modules/
 *.log
 vendor/*/
 *.m4a
+__pycache__/
+*.pyc

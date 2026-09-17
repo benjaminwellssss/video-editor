@@ -7,20 +7,23 @@ separated in the full-VOD run (spot-check before trusting this for a window
 that reads garbled/merged; if so, extract and re-transcribe that window in
 isolation instead, per the short15 lesson).
 
-Usage: <venv-python> build_short_cards_from_segments.py <segments.json> <full_words.json> <out_cards.json>
+Usage: <venv-python> build_short_cards_from_segments.py <segments.json> <full_words.json> <out_cards.json> [style]
 
 segments.json: [{"start": float, "end": float}, ...] in raw VOD seconds —
 the exact jump-cut boundaries used to build the short's video.
+style: "grouped" (default, up to 4 words/card) or "single" (one word on
+screen at a time, synced to the voice saying it).
 """
 import json
 import sys
 
 sys.path.insert(0, __file__.rsplit("\\", 1)[0])
-from build_caption_cards import clean_word, words_to_cards
+from build_caption_cards import clean_word, words_to_cards, words_to_cards_single
 
 
 def main():
     seg_path, words_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+    style = sys.argv[4] if len(sys.argv) > 4 else "grouped"
     segments = json.load(open(seg_path, encoding="utf-8"))
     full = json.load(open(words_path, encoding="utf-8"))
 
@@ -48,7 +51,7 @@ def main():
                 })
         offset += b - a
 
-    cards = words_to_cards(mapped)
+    cards = words_to_cards_single(mapped) if style == "single" else words_to_cards(mapped)
     json.dump(cards, open(out_path, "w", encoding="utf-8"), indent=2)
     total_dur = cards[-1]["end"] if cards else 0
     print(f"{len(cards)} cards from {len(mapped)} mapped words, last card ends {total_dur:.1f}s")

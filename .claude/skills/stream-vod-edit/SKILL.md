@@ -844,13 +844,32 @@ each:
 
 1. Render the timeline (`render.set_format_and_codec` mp4/H264,
    `render.set_settings` with `TargetDir`/`CustomName` pointed at the dated
-   `EDITS` batch folder, `add_job` + `start`). **Verify with
-   `render.verify_output`, not just `get_job_status` — a `CompletionPercentage`
-   read shortly after `start` can show single digits with an
-   `EstimatedTimeRemainingInMs` in the tens of minutes; don't treat a
-   file that already exists on disk mid-render as finished (see
-   Non-negotiable 4a — the same "looks done but isn't" trap applies to
-   Resolve's own render, not just ffmpeg).**
+   `EDITS` batch folder, `add_job` + `start`). **Always pass
+   `ExportAudio: true` (and `ExportVideo: true`) explicitly in that
+   `set_settings` call — don't rely on the default.** Confirmed
+   2026-09-16: `timeline_frame.capture` (used constantly through a job for
+   visual spot-checks) sets the *project's* shared render settings to
+   `ExportVideo: True, ExportAudio: False` internally as an implementation
+   detail of how it grabs a single frame — this persists at the project
+   level, not scoped to that one capture, so a real render job queued any
+   time after the last `timeline_frame.capture` call **silently comes out
+   with zero audio streams** unless `ExportAudio` is explicitly set back to
+   `true` first. This produced a fully "verified" (`duration_ratio: 1`,
+   frame-exact) but completely silent 57-minute render — `render.verify_output`
+   checks duration/frame-count, not stream presence, so it did not catch
+   this. **After any render finishes, `ffprobe -show_streams` the output
+   and confirm an `audio` stream is actually present** — that's the only
+   reliable check here, since neither `get_job_status` nor `verify_output`
+   inspects streams. `render.get_settings()` isn't available on this build
+   to read the setting back before rendering, so the explicit `set_settings`
+   call before every real render job is the only safeguard.
+
+   Verify completion with `render.verify_output`, not just
+   `get_job_status` — a `CompletionPercentage` read shortly after `start`
+   can show single digits with an `EstimatedTimeRemainingInMs` in the tens
+   of minutes; don't treat a file that already exists on disk mid-render as
+   finished (see Non-negotiable 4a — the same "looks done but isn't" trap
+   applies to Resolve's own render, not just ffmpeg).
 2. Build the `.srt` per "Long-edit SRT captions" above, including the
    ASR-garble spot-check, saved alongside the video in the same dated
    `EDITS` folder.
@@ -997,9 +1016,15 @@ here — this section covers everything else.
 
 ### Deliverables beyond the video file itself
 
-- **Write a YouTube description** for the highlight edit, in the same comedic
-  voice as the content itself (not a dry/generic summary) — this is a
-  standing deliverable alongside the edit, not a one-off ask.
+- **Write a YouTube description** for the highlight edit — this is a standing
+  deliverable alongside the edit, not a one-off ask. **Format, confirmed
+  2026-09-16: exactly two sentences, not a list of bits.** First, one single
+  funny line in the user's own voice (dry, blunt, casual — not a strung-
+  together recap of multiple jokes/moments; picking one and landing it beats
+  cramming several in). Second, one plain, logical/serious sentence
+  describing what actually happens in the episode (the real content beats,
+  not jokes). Do not go back to the earlier style of chaining 3-4 bit
+  references into one descriptive paragraph — that was explicitly corrected.
 - **Every mid-length edit (the `EDITS` deliverable) always gets an
   accompanying `.srt`** — not just when captions are separately requested.
   Generate it automatically as part of finishing that edit, extrapolated
