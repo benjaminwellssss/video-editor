@@ -98,9 +98,44 @@ Everything lives under `E:\Streaming\Videos\`, which has four subfolders:
 *each* subfolder you touch (not just `CLIPS`) — e.g. a VOD edit pass creates
 `E:\Streaming\Videos\VOD\09-09-2026_Valheim\`, the highlight reel creates the
 matching folder under `EDITS`, and the shorts batch creates it under `CLIPS`.
-Individual files inside a batch folder keep their own descriptive names
-(`short1_dobby_priest_captioned.mp4`, etc.) — they don't each need their own
-subfolder.
+
+**Inside a `CLIPS` batch folder, confirmed 2026-09-18: every short gets its
+own subfolder**, named after the clip (`lord_ass_king/`, not a
+`short_lord_ass_king.mp4` file sitting flat next to a dozen others). That
+folder holds the clip's full deliverable set together:
+
+```
+CLIPS/09-17-2026_Valheim/lord_ass_king/
+  lord_ass_king.mp4
+  captions.json       <- the caption cards.json used for this render
+  metadata.txt
+```
+
+**Captions are always delivered as `captions.json` inside that clip's
+folder**, not left behind only in the working `projects/<job>/shorts/`
+tree — this is what lets `scripts/caption_editor/` (or a future re-render)
+find the right cards file for a given delivered clip without hunting
+through scratch files by name prefix.
+
+**A duplicate/variation of a short (different caption treatment, a
+different cut, etc.) gets its own subfolder inside the clip's folder,
+named for what changed** — not a filename suffix like `_v2` or `_colored`
+sitting flat next to the original:
+
+```
+CLIPS/09-17-2026_Valheim/lord_ass_king/
+  lord_ass_king.mp4
+  captions.json
+  metadata.txt
+  speaker-colored-captions/
+    lord_ass_king.mp4
+    captions.json
+    metadata.txt
+```
+
+`VOD`/`EDITS` batches are usually a single file and don't need this
+per-item nesting — this rule is specifically for `CLIPS`, where a batch is
+several independent shorts (and sometimes several variants of one short).
 
 **Naming format:** `MM-DD-YYYY_GAME` (or `MM-DD-YYYY_EVENTNAME` for a non-game
 stream), using the date the content was *recorded*, not the edit date. If a
