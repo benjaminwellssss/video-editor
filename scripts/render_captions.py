@@ -3,13 +3,18 @@
 Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov>
 
 cards.json is either:
-  - a flat list of {"start", "end", "lines", "words"?} (single-speaker, as before), or
+  - a flat list of {"start", "end", "lines", "words"?, "fill"?} (single-speaker, as before), or
   - {"primary": [...same card shape...], "secondary": [...same card shape...]}
     for multi-speaker jobs — "secondary" cards render as a smaller (50%),
     yellow-base second caption row beneath whichever primary card is showing,
     for moments where a second speaker talks over the first. Both lists use
     word-level "speaker"-turn card breaks (see build_speaker_cards.py) so at
     most one speaker's text is ever in a given card.
+
+  Optional per-card "fill": [r, g, b, a] overrides the base word color for
+  that card, ignoring the style's normal white/yellow default — used to
+  color-code single-word caption cards by diarized speaker (see
+  build_speaker_colors.py). Stroke/extrude shadow stay black regardless.
 """
 import json
 import re
@@ -179,13 +184,16 @@ def render_word_image(word, style, fill):
     return canvas, left_ox, top_oy, content_w, content_h
 
 
-def render_line_image(words, active_idx, style=PRIMARY_STYLE):
+def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None):
     """One caption line built word-by-word so the currently-spoken word (at
     `active_idx`, or None) can be colored separately from the rest. `style`
     picks font size/stroke/base-color — PRIMARY_STYLE (white) or
-    SECONDARY_STYLE (yellow, 50% size) for a simultaneous second speaker."""
+    SECONDARY_STYLE (yellow, 50% size) for a simultaneous second speaker.
+    `fill_override`, when given, replaces style's base_fill for every
+    non-active word in the line — used for per-speaker caption coloring
+    (see card["fill"] in compose_card)."""
     word_gap = style["word_gap"]
-    base_fill = style["base_fill"]
+    base_fill = tuple(fill_override) if fill_override is not None else style["base_fill"]
     pieces = []
     for wi, word in enumerate(words):
         fill = HIGHLIGHT_GREEN if wi == active_idx else base_fill
@@ -260,11 +268,18 @@ def compose_card(card, t, style, cache):
     top_center_y is where the TOP line's glyph-center sits within block_img
     (the anchor callers align to BAR_CENTER_Y or a stacked position below
     it), bottom_edge_y is the block's lowest content pixel (for stacking a
-    second block beneath this one)."""
+    second block beneath this one).
+
+    If the card carries a "fill" key (an [r,g,b,a] list), it overrides the
+    style's base word color — used for per-speaker caption coloring on
+    single-word cards, where there's no highlight-vs-rest distinction to
+    preserve (green=Ben, yellow/red/blue=others, assigned by build_speaker_colors.py)."""
+    fill_override = card.get("fill")
+
     def get_line_image(words, active_idx):
-        key = (style["font"].size, tuple(words), active_idx)
+        key = (style["font"].size, tuple(words), active_idx, tuple(fill_override) if fill_override else None)
         if key not in cache:
-            cache[key] = render_line_image(words, active_idx, style)
+            cache[key] = render_line_image(words, active_idx, style, fill_override)
         return cache[key]
 
     active_global = active_word_index(card, t)

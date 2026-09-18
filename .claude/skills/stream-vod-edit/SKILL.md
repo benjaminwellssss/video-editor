@@ -142,6 +142,50 @@ The reliable process:
 5. If the user later says a labeled speaker is wrong, stop all audio work
    immediately and wait for them to check manually — don't keep guessing.
 
+### This rig's specific 4-track layout (confirmed 2026-09-16/17)
+
+Once identified for a given rig, a track layout is a standing fact about the
+hardware/software setup, not a one-off finding — reuse it on the next VOD
+from the same rig without re-probing from scratch (a light re-verification
+is still fine, a full multi-timestamp probe is not needed every time).
+Confirmed layout on this streamer's setup, using **VLC's 1-based track
+numbering** (ffmpeg's `-map 0:a:N` is 0-based, so VLC track K = ffmpeg
+index K-1):
+
+| VLC track | ffmpeg index | Content |
+|---|---|---|
+| 1 | 0 | **Aggregate** — full program mix: game audio, the streamer's voice, music, and any other players' voices (Discord/co-op partners) all mixed together. |
+| 2 | 1 | **Streamer's isolated voice only** — clean single mic, but misses every other speaker entirely. |
+| 3 | 2 | Labeled "Discord" but in practice carries a near-duplicate of the full program mix when a co-op partner is present, not a clean isolated feed of them — confirmed silent on a solo-stream night, confirmed near-identical to the aggregate track on a co-op night. Not useful as a clean second-speaker source. |
+| 4 | 3 | Game/music only, no speech. |
+
+**Standing rule, confirmed 2026-09-18: transcribe from the aggregate track
+(VLC 1 / ffmpeg index 0) by default, always** — not the isolated voice
+track. Using the isolated voice track for transcription was tried once and
+caused two compounding bugs on a co-op session: (1) every caption/SRT was
+missing the other player's dialogue entirely, since that track only ever
+captures the streamer, and (2) far worse, the **dead-air trim silently cut
+real content** — any stretch where the streamer was quiet while the other
+player was talking read as silence on the isolated track and got trimmed
+out of the edit, even though it wasn't dead air at all. Re-cutting from the
+aggregate track after the fact roughly **doubled** the kept duration of a
+124-minute session (66 min → 124 min) purely by recovering wrongly-trimmed
+co-op dialogue — this is not a minor caption gap, it silently reshapes the
+whole cut.
+
+**Only fall back to the isolated voice track when the streamer's own lines
+are too quiet/unclear in the aggregate mix** to transcribe accurately for a
+specific stretch — cross-check that narrow window against the isolated
+track rather than switching the whole job's source over.
+
+There is no clean isolated track for a second speaker on this rig. Full
+per-speaker color-coded captions would require diarization on the aggregate
+mix (see the "Multi-speaker captions" section under Captions below), which
+is far too slow to run casually — the pragmatic default is a single
+merged-speaker transcript from the aggregate track (whoever's talking gets
+captioned, no color differentiation), not full diarization, unless the user
+explicitly asks for the diarized treatment and is told the time cost upfront.
+
 ## Video editing
 
 - **Transcribe once** with WhisperX (word-level timestamps), cached per job.
@@ -189,6 +233,26 @@ The reliable process:
 - **4-5 shorts per batch** (unless told otherwise), 30-90s each, funniest
   self-contained moments — see "Selecting moments to clip" below for how
   candidates are found.
+- **YouTube Shorts max length is 3 minutes (180s)**, extended from 60s in
+  October 2024 — confirmed via web search 2026-09-18, don't assume the old
+  60s ceiling. This is headroom, not a target: don't pad a short to fill it,
+  but don't reflexively cut a punchline down to under a minute either if the
+  setup genuinely needs more room.
+- **A punchline needs its setup, even if the setup runs long.** Confirmed
+  2026-09-18 after a batch of shorts came back too short/disjointed: several
+  had the punchline cut with barely any lead-in (e.g. jumping straight to
+  "My lord, my lord ass king, what is thy bidding today?" with no context),
+  when the actual joke only works with the setup that precedes it — in that
+  case, a whole preceding riff ("I am asking. I am asking. I am asking.")
+  that the punchline is a pun on ("ass king" ⟵ "asking"). Cutting tight to
+  just the marked/flagged moment optimizes for the wrong thing here. Before
+  finalizing a short's boundaries, read backward from the punchline through
+  the actual transcript (not just the marker timestamp) and find where the
+  *joke* — not just the *line* — starts; that's often 30-90+ seconds earlier
+  than the flagged moment, sometimes bleeding into an adjacent bit that
+  should be merged in rather than treated as a separate short (two markers
+  ~2 minutes apart turned out to be one continuous bit and got combined into
+  a single longer short instead of two disjointed short ones).
 - **Jump cut dead time inside a short.** A short does not have to be one
   unbroken slice of the raw timeline — if nobody's talking or nothing
   interesting is happening partway through an otherwise-good moment, cut
