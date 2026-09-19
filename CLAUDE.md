@@ -82,4 +82,10 @@ pipeline stage.
 - `.claude/skills/` — HyperFrames composition-authoring skills, copied from
   `vendor/hyperframes/skills/`
 - `.mcp.json` — Resolve MCP registration for this project
+- `assets/` — permanent branding/assets (never leave these in Downloads):
+  `fonts/` (Bebas Neue, used by captions) and
+  `overlays/handles_overlay.gif`, the user's animated social-handles overlay.
+  **It goes in most, if not all, of the user's videos** (decided 2026-09-19) —
+  default to including it; details and placement in the `stream-vod-edit`
+  skill ("Social-handles GIF overlay").
 - `projects/<job>/{raw,transcript,graphics,outputs}/`

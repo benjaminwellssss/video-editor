@@ -495,6 +495,72 @@ re-centered on the new seam y-value (the overlay y used for gameplay) even
 though there's no visible black bar to anchor to anymore — it's still the
 natural visual boundary between the two halves.
 
+### Social-handles GIF overlay (standing branding element)
+
+The user supplied an animated overlay for their social handles (a retro
+"find-me.exe" window: @beanjahmean, "same handle, every platform", Twitch /
+X / Instagram / TikTok / YouTube buttons) and asked on 2026-09-19 that it go
+in **most, if not all, of their videos from now on** — treat it as the
+default for every short and edit unless the user says to leave it off, and
+mention it when reporting a finished video so a missing one is noticed.
+
+- **File (permanent home, git-tracked):**
+  `C:\Users\Bem\Desktop\video-editor\assets\overlays\handles_overlay.gif` —
+  880x540, 25fps, 201 frames (8.04s), has alpha. Never leave it (or any
+  asset a Resolve project links to) in Downloads: moving a linked file takes
+  the media offline, so after moving one, relink it with
+  `media_pool_item.replace_clip` and read `File Path` back.
+- **Reference placement (from `hooded_figure`, 09-16):** on video track 2,
+  ZoomX/ZoomY 0.7, Pan 0, bottom-center of the 1080x1920 frame (window
+  occupies roughly x 220-860, y 1608-1920, bottom edge slightly clipped —
+  the API's Tilt readback of about -2379 is not trustworthy on this build,
+  so copy placement by looking at a rendered frame, not by the number).
+  It plays once for its full 8.04s, starting roughly 70% of the way into
+  the short. Reuse that placement/timing unless told otherwise; for 16:9
+  long-form it needs its own placement (ask or propose one and show a frame).
+- **It is separate from the static `@beanjahmean` handle** (top-left,
+  `render_handle.py`), which stays on every short as before — both were
+  composited together on `hooded_figure` and the user was fine with that.
+  The GIF is the animated call-to-action; the static handle is the
+  persistent watermark. If the user ever wants one dropped, ask which.
+- **Track 2 rendered fine here.** On a project created at the right
+  1080x1920/30fps *before the first timeline existed*, a GIF on V2 rendered
+  correctly in Resolve's own export — this contradicts the older "second
+  video track never renders" finding for custom-resolution timelines, so
+  don't assume either way: **render, pull a frame from inside the GIF's
+  window with `ffmpeg -ss`, and look at it.** If it ever fails to render,
+  overlay the GIF with ffmpeg instead (`-i handles_overlay.gif`, overlay
+  with `enable='between(t,T0,T0+8.04)'`), and verify by frame extraction.
+- The stream's own OBS overlay also contains a small "find-me.exe" window
+  (bottom-right of the source) that the vertical gameplay crop clips at the
+  frame edge — that is in the raw footage, not something the pipeline
+  added.
+
+### Captions after the user hand-edits a short in Resolve
+
+Sometimes the user takes a finished short into Resolve to tweak audio/music
+and trims dead air. The edit then no longer matches the caption timing built
+against the base clip, so the captions must be re-timed, not reused:
+
+1. Read the cut from Resolve, never guess it: `timeline.source_range_report`
+   gives the kept **source frame ranges** (end exclusive) per clip; also list
+   every track's items (`timeline.get_items_in_track`) to see what they added
+   (music on A2, the GIF on V2).
+2. Transcribe + diarize the **no-music** base audio (the aggregate track, per
+   the audio rules above) rather than the final mix — music hurts ASR.
+3. `scripts/build_cards_from_ranges.py <diarized.json> <cards.json> <fps>
+   <start:end> ...` drops words inside removed stretches, shifts the rest onto
+   the edited timeline, and applies speaker colors (heaviest speaker green).
+4. Render captions for the exact export duration, then composite with the
+   handle PNG over the **Resolve export** and copy its audio (`-c:a copy`).
+   Verify the export first: `render.verify_output`, then `ffprobe` for an
+   audio stream, then compare durations against the timeline frame count.
+5. When the user wants to mix music themselves, give them a music-free base
+   (stream audio only) and let them add the track; check their export's audio
+   by comparing it against the stream audio (the music zone should differ,
+   untouched stretches should match to ~-30 dB).
+6. File it as a variant folder per the CLIPS rules above.
+
 ### Resolve free-edition limitations (why ffmpeg does so much of this)
 
 - No audio-volume API at all (`SetProperty('Volume', ...)` always returns
