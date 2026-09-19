@@ -82,10 +82,15 @@ pipeline stage.
 - `.claude/skills/` — HyperFrames composition-authoring skills, copied from
   `vendor/hyperframes/skills/`
 - `.mcp.json` — Resolve MCP registration for this project
-- `assets/` — permanent branding/assets (never leave these in Downloads):
-  `fonts/` (Bebas Neue, used by captions) and
-  `overlays/handles_overlay.gif`, the user's animated social-handles overlay.
-  **It goes in most, if not all, of the user's videos** (decided 2026-09-19) —
-  default to including it; details and placement in the `stream-vod-edit`
-  skill ("Social-handles GIF overlay").
+- `assets/fonts/` — Bebas Neue, used by captions
 - `projects/<job>/{raw,transcript,graphics,outputs}/`
+
+## Video overlays (not in this repo)
+
+The user's video overlays live in **`E:\Streaming\Overlays + Images\Video
+Overlays\`** (their choice, 2026-09-19) — look there first, and never leave an
+overlay or any other linked asset in Downloads. That folder holds
+`handles_overlay.gif` (animated social-handles overlay) and entrance variants
+of it. **A handles overlay goes in most, if not all, of the user's videos** —
+default to including it. Details, variants, and placement are in the
+`stream-vod-edit` skill ("Social-handles GIF overlay").

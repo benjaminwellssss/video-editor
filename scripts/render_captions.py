@@ -17,10 +17,13 @@ cards.json is either:
   build_speaker_colors.py). Stroke/extrude shadow stay black regardless.
 """
 import json
+import math
 import re
 import subprocess
 import sys
 from PIL import Image, ImageDraw, ImageFont
+
+from caption_fx import describe, fx_from_note
 
 W, H = 1080, 1920
 FPS = 30
@@ -319,12 +322,78 @@ def compose_card(card, t, style, cache):
 def current_card(cards, ci_state, key, t):
     """Advance the (single, shared) index cursor for one card list and
     return the card active at time t, or None."""
+    # The card on screen is the most recently STARTED one, if it hasn't
+    # ended. When timings overlap (a word held long by the aligner, or hand
+    # edits), the newer card replaces the older one and the older one never
+    # comes back — same rule as the caption editor's preview, so what you
+    # see there is what gets rendered.
     ci = ci_state[key]
-    while ci < len(cards) - 1 and t >= cards[ci]["end"]:
+    while ci + 1 < len(cards) and cards[ci + 1]["start"] <= t:
         ci += 1
     ci_state[key] = ci
     card = cards[ci] if cards[ci]["start"] <= t < cards[ci]["end"] else None
     return card
+
+
+NOTE_RE = re.compile(r"\*([^*]*)\*")
+
+
+def sanitize_cards(cards):
+    """Editor notes (*like this*) are instructions, never caption text. The
+    caption editor already keeps them out of "lines", but files saved by an
+    older editor (or hand-edited) can still carry them inline — pull them out
+    into card["note"] here so they can never be drawn. Also honors "|" as a
+    line break. Cards left with no text are dropped (an empty card breaks the
+    renderer)."""
+    kept = []
+    for card in cards:
+        notes = [card["note"]] if card.get("note") else []
+        lines = []
+        for line in card.get("lines", []):
+            notes += [n.strip() for n in NOTE_RE.findall(line) if n.strip()]
+            for part in NOTE_RE.sub(" ", line).split("|"):
+                part = re.sub(r"\s+", " ", part).strip()
+                if part:
+                    lines.append(part)
+        if not lines:
+            continue
+        card["lines"] = lines
+        if notes:
+            card["note"] = "; ".join(notes)
+        kept.append(card)
+    return kept
+
+
+def fx_scale(fx, t, card):
+    if not fx.get("scale_to"):
+        return 1.0
+    dur = max(card["end"] - card["start"], 0.05)
+    u = min(1.0, max(0.0, (t - card["start"]) / dur))
+    if fx.get("scale_fast"):
+        u = 1 - (1 - min(1.0, u / 0.35)) ** 3  # punches to size in the first third
+    return 1.0 + (fx["scale_to"] - 1.0) * u
+
+
+def fx_shake(fx, t):
+    """(dx, dy, angle_degrees) — deterministic in t, so re-renders are identical."""
+    amp = fx.get("shake_px", 0)
+    if not amp:
+        return 0, 0, 0.0
+    w = 2 * math.pi * fx.get("shake_hz", 24) * t
+    dx = amp * (0.6 * math.sin(w) + 0.4 * math.sin(2.7 * w + 1.3))
+    dy = amp * (0.6 * math.sin(1.31 * w + 0.7) + 0.4 * math.sin(3.1 * w + 2.1))
+    angle = 0.1 * amp * math.sin(0.83 * w + 0.4) if amp >= 15 else 0.0  # big shakes also rock
+    return int(round(dx)), int(round(dy)), angle
+
+
+def composite_clipped(frame, img, x, y):
+    """alpha_composite that tolerates img hanging off the frame (shaken or
+    zoomed captions can cross the edge)."""
+    fx0, fy0 = max(x, 0), max(y, 0)
+    fx1, fy1 = min(x + img.width, frame.width), min(y + img.height, frame.height)
+    if fx1 <= fx0 or fy1 <= fy0:
+        return
+    frame.alpha_composite(img.crop((fx0 - x, fy0 - y, fx1 - x, fy1 - y)), (fx0, fy0))
 
 
 def main():
@@ -335,6 +404,12 @@ def main():
         secondary_cards = raw.get("secondary", [])
     else:
         primary_cards, secondary_cards = raw, []
+    primary_cards = sanitize_cards(primary_cards)
+    secondary_cards = sanitize_cards(secondary_cards)
+    for card in primary_cards:
+        card["_fx"] = card.get("fx") or fx_from_note(card.get("note"))
+        if card.get("note"):
+            print(f'  note @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
     total_frames = int(round(duration_s * FPS))
 
     cache = {}
@@ -357,12 +432,23 @@ def main():
         if card is not None:
             progress = ease_out_back(min(1.0, (t - card["start"]) / POP_DURATION))
             scale = (0.55 + 0.45 * progress) * card.get("emphasis_scale", 1.0)
+            fx = card.get("_fx") or {}
+            dx = dy = 0
+            angle = 0.0
+            if fx:
+                scale *= fx_scale(fx, t, card)
+                dx, dy, angle = fx_shake(fx, t)
             block, top_center_y, bottom_edge_y = compose_card(card, t, PRIMARY_STYLE, cache)
             nw = max(1, int(block.width * scale))
             nh = max(1, int(block.height * scale))
             resized = block.resize((nw, nh), Image.LANCZOS)
             canvas_y = int(BAR_CENTER_Y - top_center_y * scale)
-            frame.alpha_composite(resized, (cx - nw // 2, canvas_y))
+            paste_x, paste_y = cx - nw // 2, canvas_y
+            if angle:
+                resized = resized.rotate(angle, resample=Image.BICUBIC, expand=True)
+                paste_x -= (resized.width - nw) // 2
+                paste_y -= (resized.height - nh) // 2
+            composite_clipped(frame, resized, paste_x + dx, paste_y + dy)
             primary_bottom_in_frame = canvas_y + bottom_edge_y * scale
 
         sec_card = current_card(secondary_cards, ci_state, "secondary", t) if secondary_cards else None

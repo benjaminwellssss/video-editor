@@ -504,12 +504,23 @@ in **most, if not all, of their videos from now on** — treat it as the
 default for every short and edit unless the user says to leave it off, and
 mention it when reporting a finished video so a missing one is noticed.
 
-- **File (permanent home, git-tracked):**
-  `C:\Users\Bem\Desktop\video-editor\assets\overlays\handles_overlay.gif` —
-  880x540, 25fps, 201 frames (8.04s), has alpha. Never leave it (or any
-  asset a Resolve project links to) in Downloads: moving a linked file takes
-  the media offline, so after moving one, relink it with
-  `media_pool_item.replace_clip` and read `File Path` back.
+- **Where video overlays live (user's decision, 2026-09-19):**
+  `E:\Streaming\Overlays + Images\Video Overlays\` — not in this repo. Look
+  there first for any overlay; when the user adds a new one, that's where it
+  belongs. Never leave it (or any asset a Resolve project links to) in
+  Downloads: moving a linked file takes the media offline, so after moving
+  one, relink it with `media_pool_item.replace_clip` and read `File Path`
+  back. (`hooded_figure_audio` was relinked to the E: path.)
+- **Files there** — all five are 880x540, 25fps, 8.04s, with alpha, and
+  settle into the *same* resting pose (the window centered in its canvas);
+  they differ only in the entrance animation:
+  - `handles_overlay.gif` — the original; window slides up in from the bottom
+  - `handles_overlay_left.gif` / `_right.gif` / `_top.gif` — slides in from
+    that side
+  - `handles_overlay_pop.gif` — scales/pops in
+  (Entrances identified from frames at 0.3s; the user didn't say which they
+  prefer — use the original by default and offer the others, e.g. when the
+  overlay would collide with something on that edge.)
 - **Reference placement (from `hooded_figure`, 09-16):** on video track 2,
   ZoomX/ZoomY 0.7, Pan 0, bottom-center of the 1080x1920 frame (window
   occupies roughly x 220-860, y 1608-1920, bottom edge slightly clipped —
@@ -546,11 +557,26 @@ against the base clip, so the captions must be re-timed, not reused:
    gives the kept **source frame ranges** (end exclusive) per clip; also list
    every track's items (`timeline.get_items_in_track`) to see what they added
    (music on A2, the GIF on V2).
-2. Transcribe + diarize the **no-music** base audio (the aggregate track, per
-   the audio rules above) rather than the final mix — music hurts ASR.
-3. `scripts/build_cards_from_ranges.py <diarized.json> <cards.json> <fps>
-   <start:end> ...` drops words inside removed stretches, shifts the rest onto
-   the edited timeline, and applies speaker colors (heaviest speaker green).
+2. **Take word text and timing from the full-VOD transcript, cut to the
+   short's source windows — do NOT transcribe the short clip on its own.**
+   Learned the hard way on `hooded_figure` (2026-09-19): a clip-only
+   WhisperX run has no audio around the clip's edges, so it swallowed an
+   entire opening phrase ("THE HECK IS THAT"), stretched a word across 1.3s
+   of silence, and parked a stray "I" 0.6s early. The full-VOD words (which
+   have context) were right, agreeing with the isolated mic. Use diarization
+   only for *who* is speaking, never as the word/timing source.
+3. `scripts/build_cards_from_ranges.py <words.json> <cards.json> <fps>
+   <start:end> ...` (it wants whisperx-format words with a `speaker` field —
+   build that from the full-VOD words mapped onto the base timeline)
+   drops words inside removed stretches, shifts the rest onto the edited
+   timeline, and applies speaker colors (heaviest speaker green).
+   **Always run `scripts/verify_caption_timing.py <cards.json> <voice.wav>
+   [fps ranges]` on captions the pipeline just generated** (never on ones the
+   user has hand-edited — see "manual edits are gospel" below) against the
+   isolated-mic audio cut the same way; it flags PHANTOM (a card with no voice under it — e.g. Whisper's
+   invented trailing "you"), EARLY (a card up long before its word) and LONG
+   (one word held >1s, i.e. swallowed neighbours). It flagged a phantom "YOU"
+   in an already-delivered short. Fix what it flags before rendering.
 4. Render captions for the exact export duration, then composite with the
    handle PNG over the **Resolve export** and copy its audio (`-c:a copy`).
    Verify the export first: `render.verify_output`, then `ffprobe` for an
@@ -560,6 +586,51 @@ against the base clip, so the captions must be re-timed, not reused:
    by comparing it against the stream audio (the music zone should differ,
    untouched stretches should match to ~-30 dB).
 6. File it as a variant folder per the CLIPS rules above.
+
+### Caption editor notes and effects (`*note*`, `|`)
+
+The user edits captions in their standalone editor (`E:\Coding Repos\
+caption-editor\`, launched from the "Caption Editor" desktop shortcut). In a
+caption's text box (2026-09-19):
+
+- `*like this*` is an **editor note**: an instruction, never displayed. The
+  editor saves it in the card's `"note"` field and keeps it out of `"lines"`.
+  Treat every `note` in a `captions.json` as a to-do from the user for that
+  card, and say in your report what you did with each.
+- `|` is a **line break** (`HECK|YES` -> two stacked lines; `"lines"` has two
+  entries).
+
+`render_captions.py` runs each card's note through `scripts/caption_fx.py`,
+which understands grow / zoom / shake / vibrate plus intensity words (gentle,
+very, extremely, violent...), and prints for every note what it inferred, or
+`NOT UNDERSTOOD` — a note it can't do is reported, never silently dropped, so
+handle those by hand (or extend `caption_fx.py`). A card may also carry an
+explicit `"fx"` dict, which wins. Effects apply to that card's caption only,
+never to the video. The renderer also strips any `*...*` still sitting inside
+`lines` (older files), so a note can never be drawn.
+
+**Overlapping cards:** the newest-started card wins and the older one never
+comes back (the same rule as the editor's preview). This matters because a
+word held long by the aligner overlaps its neighbours, and hand-edited
+timings can too — check overlaps in a user's file before assuming a card
+will show. Untagged cards (no `speaker`/`fill`) render white; don't guess
+speakers for the user.
+
+**The user's manual caption edits are gospel — render them exactly as
+written, and do not audit them.** (Stated by the user 2026-09-19 after I ran
+several rounds of audio/transcript cross-checks on their hand-edited
+`lord_ass_king` captions and then asked them questions about their timings.)
+If a `captions.json` has been edited by hand — text, emoji, timing, speaker
+tags, notes, merged or deleted cards — apply it as-is: don't compare it to a
+transcript, don't run `verify_caption_timing.py` on it, don't "correct" or
+question its timings, don't ask them to confirm choices that look odd. The
+only thing to do with an odd-looking edit is render it. (In that very case
+the user's timings turned out right and the transcript wrong, but the rule
+holds even when you can't prove that.) The verification tools above are for
+captions *the pipeline generated*, where nobody has yet listened and decided.
+The one allowed exception is mechanical: a renderer behaviour that would make
+the render differ from what the user saw in the editor preview (e.g. overlapping
+cards) gets fixed in the renderer, in the user's favour, silently.
 
 ### Resolve free-edition limitations (why ffmpeg does so much of this)
 
