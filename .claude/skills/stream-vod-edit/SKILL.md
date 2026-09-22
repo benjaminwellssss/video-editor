@@ -472,6 +472,36 @@ position/size, split y-value, letterbox band height) per new OBS layout
 rather than assuming they're universal, per the
 facecam-position-isn't-guaranteed-constant note above.
 
+### Facecam framing in the split layout (user's decision, 2026-09-22)
+
+**Never stretch the facecam to force-fill its share of the vertical
+frame.** The old approach scaled the *entire* facecam capture box
+(background wall, mic arm, window chrome and all) up to exactly the
+canvas width — that's "prioritizing the frame of the facecam" and it's
+no longer the goal. Instead:
+
+1. **Crop *within* the facecam box**, tighter than the full capture
+   region — a proper close-up on the subject (head/shoulders), not the
+   whole webcam window. Verify by frame extraction same as always, at
+   more than one timestamp.
+2. **Scale that tighter crop up preserving its native aspect ratio** —
+   width and height scale by the same factor. No forced-fit distortion,
+   ever.
+3. Because the scaled result is narrower than the canvas, **pad it out
+   to full canvas width with plain black** (`pad=<canvas_w>:<h>:<x>:0:black`,
+   centered) rather than stretching to fill. A sliver of gameplay showing
+   through on the sides instead of black is also fine if that's a better
+   fit for a given layout — the constraint is "never distort the face,"
+   not "always black."
+
+Worked example (`valheim-deadweight-challenge`, facecam box was
+`465:405` at `1455,675`): tight crop `crop=280:330:1595:715` (cuts the
+window chrome and most of the background clutter), scaled 2x to
+`560:660` (exact aspect preserved), padded to `1080:660:260:0:black`.
+`facecam_height` for the gameplay-overlay math becomes the padded box's
+own height (660 here), not some larger number chosen to match the old
+full-bleed style.
+
 ### Handle/watermark overlay
 
 A static `@beanjahmean` handle sits in the empty headroom space above the
@@ -521,14 +551,29 @@ mention it when reporting a finished video so a missing one is noticed.
   (Entrances identified from frames at 0.3s; the user didn't say which they
   prefer — use the original by default and offer the others, e.g. when the
   overlay would collide with something on that edge.)
-- **Reference placement (from `hooded_figure`, 09-16):** on video track 2,
-  ZoomX/ZoomY 0.7, Pan 0, bottom-center of the 1080x1920 frame (window
-  occupies roughly x 220-860, y 1608-1920, bottom edge slightly clipped —
-  the API's Tilt readback of about -2379 is not trustworthy on this build,
-  so copy placement by looking at a rendered frame, not by the number).
-  It plays once for its full 8.04s, starting roughly 70% of the way into
-  the short. Reuse that placement/timing unless told otherwise; for 16:9
-  long-form it needs its own placement (ask or propose one and show a frame).
+- **Current default placement for shorts (user's decision, 2026-09-22):
+  middle-right, 75% scale, using the `_right` (slides in from the right)
+  variant, resting so it doesn't cover captions.** Superseding the older
+  bottom-center default below for 9:16 shorts specifically. Concretely, on
+  a 1080x1920 canvas: scale the GIF's own 880-wide canvas to 660 wide
+  (75%, height follows at 405 - never change width/height independently,
+  the source has no alpha-safe way to re-derive a mismatched aspect), then
+  overlay at `x=1080-w-24` (right edge, small margin) and `y=1600-h/2`
+  (vertically centered on the middle of the frame's bottom third, i.e.
+  `y=1600` for a 1920-tall canvas - recompute proportionally for a
+  different canvas height). Verify by frame extraction same as
+  always - both the resting frame and an early (~0.5s in) frame to confirm
+  the slide-in reads as coming from off-screen right, and that it clears
+  whatever's rendering at the caption anchor height.
+- **Older reference placement (from `hooded_figure`, 09-16, now superseded
+  for shorts by the above):** on video track 2, ZoomX/ZoomY 0.7, Pan 0,
+  bottom-center of the 1080x1920 frame (window occupies roughly x 220-860,
+  y 1608-1920, bottom edge slightly clipped — the API's Tilt readback of
+  about -2379 is not trustworthy on this build, so copy placement by
+  looking at a rendered frame, not by the number). It plays once for its
+  full 8.04s, starting roughly 70% of the way into the short. Still the
+  starting point for anything that isn't a 9:16 short (e.g. 16:9 long-form
+  needs its own placement — ask or propose one and show a frame).
 - **It is separate from the static `@beanjahmean` handle** (top-left,
   `render_handle.py`), which stays on every short as before — both were
   composited together on `hooded_figure` and the user was fine with that.
