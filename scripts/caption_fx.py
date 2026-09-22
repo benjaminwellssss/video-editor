@@ -75,10 +75,14 @@ RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasin
 
 URL_RE = re.compile(r"https?://\S+")
 GLOBAL_RE = re.compile(
-    r'(?:make\s+all\s+instances\s+of|every\s+time\s+it\s+says|whenever\s+it\s+says|any\s+time\s+it\s+says)'
-    r'\s+["“]([^"”]+)["”]\s+do\s+(?:a\s+|an\s+)?(.+)',
+    r'(?:make\s+all\s+instances\s+of|every\s+instance\s+of|every\s+time\s+it\s+says|'
+    r'whenever\s+it\s+says|any\s+time\s+it\s+says)'
+    r'\s+(.+?)\s+'
+    r'(?:do\s+(?:a\s+|an\s+)?|should\s+(?:be\s+)?)(.+)',
     re.I,
 )
+QUOTED_RE = re.compile(r'[\'"‘“]([^\'"’”]+)[\'"’”]')
+END_OF_VIDEO_RE = re.compile(r"(?:until|till|til|to)\s+(?:the\s+)?end\b|rest\s+of\s+the\s+video", re.I)
 
 
 def _words(note):
@@ -104,15 +108,21 @@ def is_ramp_trigger(note):
 
 
 def parse_global_instruction(note):
-    """Return (target_words, effect_note) for a 'make all instances of "X,
-    Y" do a <effect>' style note, or None if the note isn't one of these."""
+    """Return (target_words, effect_note) for a note naming which words to
+    apply an effect to everywhere they appear - "make all instances of "X,
+    Y" do a <effect>", "every instance of 'X' or 'Y' should <effect>", etc.
+    - or None if the note isn't one of these. The target span may hold one
+    quoted phrase ("X, and Y") or several separately-quoted words ('X' or
+    'Y'); either way every word in it (minus and/or) becomes a target."""
     if not note:
         return None
     m = GLOBAL_RE.search(note)
     if not m:
         return None
     targets_raw, effect_note = m.groups()
-    targets = [w for w in re.findall(r"[a-z']+", targets_raw.lower()) if w != "and"]
+    quoted = QUOTED_RE.findall(targets_raw)
+    word_source = " ".join(quoted) if quoted else targets_raw
+    targets = [w for w in re.findall(r"[a-z']+", word_source.lower()) if w not in ("and", "or")]
     if not targets:
         return None
     return targets, effect_note.strip()
@@ -156,7 +166,7 @@ def fx_from_note(note):
     if m:
         fx["image_url"] = m.group(0).rstrip(").,”’")
         low = note.lower()
-        fx["image_duration"] = "end" if ("until the end" in low or "until end" in low or "rest of the video" in low) else 3.0
+        fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else 3.0
         if any(w in low for w in ("above", "over")):
             fx["image_position"] = "above"
         else:

@@ -23,6 +23,14 @@ gameplay_filter/facecam_filter: ffmpeg -filter_complex fragments (e.g.
 facecam_height: the facecam branch's scaled output height in px - needed to
 know where to overlay the gameplay branch beneath it. canvas_height defaults
 to 1920 (standard vertical short).
+
+A segment may instead carry its own "full_facecam_filter" (an ffmpeg
+-filter_complex fragment producing a full 1080x<canvas_height> frame on its
+own, e.g. "crop=540:960:780:70,scale=1080:1920") to bypass the split layout
+entirely for that segment - for a direct-to-camera moment recorded with the
+facecam window resized/recentred instead of docked in its usual gameplay
+corner (its own crop, verified separately; don't assume it matches the
+gameplay-segment facecam box).
 """
 import json
 import subprocess
@@ -47,14 +55,20 @@ def main():
             dur = end - start
             part_path = tmp / f"part{i}.mp4"
             print(f"compositing segment {i+1}/{len(segments)} ({start}-{end}, {dur:.1f}s)")
+            full_filter = seg.get("full_facecam_filter")
+            if full_filter:
+                filter_complex = f"[0:v]{full_filter}[outv]"
+            else:
+                filter_complex = (
+                    f"color=c=black:s={CANVAS_W}x{canvas_height}:d={dur}:r=30[bg];"
+                    f"[0:v]{gameplay_filter}[gameplay];"
+                    f"[0:v]{facecam_filter}[facecam];"
+                    f"[bg][facecam]overlay=0:0[tmp];"
+                    f"[tmp][gameplay]overlay=0:{facecam_height}[outv]"
+                )
             cmd = [
                 "ffmpeg", "-nostdin", "-y", "-ss", str(start), "-i", raw_src, "-t", str(dur),
-                "-filter_complex",
-                f"color=c=black:s={CANVAS_W}x{canvas_height}:d={dur}:r=30[bg];"
-                f"[0:v]{gameplay_filter}[gameplay];"
-                f"[0:v]{facecam_filter}[facecam];"
-                f"[bg][facecam]overlay=0:0[tmp];"
-                f"[tmp][gameplay]overlay=0:{facecam_height}[outv]",
+                "-filter_complex", filter_complex,
                 "-map", "[outv]", "-map", "0:a:0",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "18",
                 "-c:a", "aac", "-b:a", "192k",
