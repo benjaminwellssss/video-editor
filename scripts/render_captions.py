@@ -3,7 +3,12 @@
 Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov>
 
 cards.json is either:
-  - a flat list of {"start", "end", "lines", "words"?, "fill"?} (single-speaker, as before), or
+  - a flat list of {"start", "end", "lines", "words"?, "fill"?, "lane"?, "note"?}. "lane"
+    (default 0) is a simultaneous-caption timeline from the caption editor:
+    lane 0 is the big main caption on the seam, each further lane is drawn
+    smaller and stacks beneath it, so several speakers can be on screen at
+    once. Within a lane the newest card wins if timings overlap. "note" is an
+    editor note that drives effects (see caption_fx.py), never drawn; or
   - {"primary": [...same card shape...], "secondary": [...same card shape...]}
     for multi-speaker jobs — "secondary" cards render as a smaller (50%),
     yellow-base second caption row beneath whichever primary card is showing,
@@ -396,24 +401,66 @@ def composite_clipped(frame, img, x, y):
     frame.alpha_composite(img.crop((fx0 - x, fy0 - y, fx1 - x, fy1 - y)), (fx0, fy0))
 
 
+def split_lanes(raw):
+    """Lane 0 is the main caption (big, at the seam); each further lane is a
+    simultaneous caption drawn smaller beneath it (several speakers at once).
+    A flat list assigns lanes from each card's "lane" (default 0, as saved by
+    the caption editor); the older {"primary": [...], "secondary": [...]}
+    form is lane 0 and lane 1."""
+    if isinstance(raw, dict):
+        lanes = [raw.get("primary", []), raw.get("secondary", [])]
+    else:
+        by_lane = {}
+        for card in raw:
+            by_lane.setdefault(max(0, int(card.get("lane", 0))), []).append(card)
+        lanes = [by_lane.get(i, []) for i in range(max(by_lane) + 1)] if by_lane else [[]]
+    return [sanitize_cards(sorted(cards, key=lambda c: c["start"])) for cards in lanes]
+
+
+def draw_card(frame, card, style, t, cache, primary, base_y=None):
+    """Draw one card (with its pop-in and any note effects). The main lane is
+    anchored on the seam; a sub-lane stacks under base_y. Returns the y of the
+    card's bottom edge so the next lane can stack beneath it."""
+    cx = W // 2
+    progress = ease_out_back(min(1.0, (t - card["start"]) / POP_DURATION))
+    scale = (0.55 + 0.45 * progress) * card.get("emphasis_scale", 1.0)
+    fx = card.get("_fx") or {}
+    dx = dy = 0
+    angle = 0.0
+    if fx:
+        scale *= fx_scale(fx, t, card)
+        dx, dy, angle = fx_shake(fx, t)
+    block, top_center_y, bottom_edge_y = compose_card(card, t, style, cache)
+    nw = max(1, int(block.width * scale))
+    nh = max(1, int(block.height * scale))
+    resized = block.resize((nw, nh), Image.LANCZOS)
+    if primary:
+        canvas_y = int(BAR_CENTER_Y - top_center_y * scale)
+    else:
+        canvas_y = int(base_y + SECONDARY_GAP_FRAC * FONT_SIZE_SECONDARY * scale)
+    paste_x, paste_y = cx - nw // 2, canvas_y
+    if angle:
+        resized = resized.rotate(angle, resample=Image.BICUBIC, expand=True)
+        paste_x -= (resized.width - nw) // 2
+        paste_y -= (resized.height - nh) // 2
+    composite_clipped(frame, resized, paste_x + dx, paste_y + dy)
+    return canvas_y + bottom_edge_y * scale
+
+
 def main():
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
-    raw = json.load(open(cards_path, encoding="utf-8"))
-    if isinstance(raw, dict):
-        primary_cards = raw.get("primary", [])
-        secondary_cards = raw.get("secondary", [])
-    else:
-        primary_cards, secondary_cards = raw, []
-    primary_cards = sanitize_cards(primary_cards)
-    secondary_cards = sanitize_cards(secondary_cards)
-    for card in primary_cards:
-        card["_fx"] = card.get("fx") or fx_from_note(card.get("note"))
-        if card.get("note"):
-            print(f'  note @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
+    lanes = split_lanes(json.load(open(cards_path, encoding="utf-8")))
+    for li, cards in enumerate(lanes):
+        for card in cards:
+            card["_fx"] = card.get("fx") or fx_from_note(card.get("note"))
+            if card.get("note"):
+                print(f'  note (lane {li + 1}) @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
+    if len(lanes) > 1:
+        print(f"  {len(lanes)} simultaneous lanes: " + ", ".join(str(len(c)) for c in lanes) + " cards")
     total_frames = int(round(duration_s * FPS))
 
     cache = {}
-    ci_state = {"primary": 0, "secondary": 0}
+    ci_state = {i: 0 for i in range(len(lanes))}
 
     ff = subprocess.Popen([
         "ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgba",
@@ -425,46 +472,18 @@ def main():
     for fi in range(total_frames):
         t = fi / FPS
         frame = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        cx = W // 2
 
-        primary_bottom_in_frame = None
-        card = current_card(primary_cards, ci_state, "primary", t) if primary_cards else None
-        if card is not None:
-            progress = ease_out_back(min(1.0, (t - card["start"]) / POP_DURATION))
-            scale = (0.55 + 0.45 * progress) * card.get("emphasis_scale", 1.0)
-            fx = card.get("_fx") or {}
-            dx = dy = 0
-            angle = 0.0
-            if fx:
-                scale *= fx_scale(fx, t, card)
-                dx, dy, angle = fx_shake(fx, t)
-            block, top_center_y, bottom_edge_y = compose_card(card, t, PRIMARY_STYLE, cache)
-            nw = max(1, int(block.width * scale))
-            nh = max(1, int(block.height * scale))
-            resized = block.resize((nw, nh), Image.LANCZOS)
-            canvas_y = int(BAR_CENTER_Y - top_center_y * scale)
-            paste_x, paste_y = cx - nw // 2, canvas_y
-            if angle:
-                resized = resized.rotate(angle, resample=Image.BICUBIC, expand=True)
-                paste_x -= (resized.width - nw) // 2
-                paste_y -= (resized.height - nh) // 2
-            composite_clipped(frame, resized, paste_x + dx, paste_y + dy)
-            primary_bottom_in_frame = canvas_y + bottom_edge_y * scale
-
-        sec_card = current_card(secondary_cards, ci_state, "secondary", t) if secondary_cards else None
-        if sec_card is not None:
-            progress = ease_out_back(min(1.0, (t - sec_card["start"]) / POP_DURATION))
-            scale = 0.55 + 0.45 * progress
-            block, top_center_y, bottom_edge_y = compose_card(sec_card, t, SECONDARY_STYLE, cache)
-            nw = max(1, int(block.width * scale))
-            nh = max(1, int(block.height * scale))
-            resized = block.resize((nw, nh), Image.LANCZOS)
-            # stack below the primary block if one is showing this frame,
-            # else anchor to the same seam the primary block would use
-            base_y = primary_bottom_in_frame if primary_bottom_in_frame is not None else BAR_CENTER_Y
-            gap_px = SECONDARY_GAP_FRAC * FONT_SIZE_SECONDARY * scale
-            canvas_y = int(base_y + gap_px)
-            frame.alpha_composite(resized, (cx - nw // 2, canvas_y))
+        bottom = None  # bottom edge of the last lane drawn; sub-lanes stack under it
+        for li, cards in enumerate(lanes):
+            card = current_card(cards, ci_state, li, t) if cards else None
+            if card is None:
+                continue
+            if li == 0:
+                bottom = draw_card(frame, card, PRIMARY_STYLE, t, cache, primary=True)
+            else:
+                # stack below whatever is showing above it, else on the seam
+                base = bottom if bottom is not None else BAR_CENTER_Y
+                bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=base)
 
         frame_bytes = frame.tobytes()
         ff.stdin.write(frame_bytes)

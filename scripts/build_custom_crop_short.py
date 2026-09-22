@@ -6,7 +6,23 @@ Each segment is composited as its own ffmpeg call, then stitched with the
 concat demuxer (stream copy) - same two-pass pattern as build_jumpcut_short.py,
 for the same memory reasons.
 
-Usage: build_custom_crop_short.py <segments.json> <raw_src> <out_mp4> <gameplay_filter> <facecam_filter>
+Compositing is done with `overlay` onto a black 1080-wide canvas, not `vstack`.
+Confirmed 2026-09-21: this machine's ffmpeg build (gyan.dev, built with
+--disable-w32threads) segfaults on `vstack` with two cropped+scaled branches
+of the same input - reproduced down to a minimal split+crop+scale+vstack
+case, with matching widths, on a short 5s test clip, so it isn't about scale
+mismatches or seeking into a large file. `overlay` with the same crop/scale
+filters works fine. If a future ffmpeg upgrade fixes this, vstack would be
+simpler, but don't switch back without testing.
+
+Usage: build_custom_crop_short.py <segments.json> <raw_src> <out_mp4>
+    <gameplay_filter> <facecam_filter> <facecam_height> [canvas_height]
+
+gameplay_filter/facecam_filter: ffmpeg -filter_complex fragments (e.g.
+"crop=960:1080:480:0,scale=1080:1215") that each produce 1080-wide output.
+facecam_height: the facecam branch's scaled output height in px - needed to
+know where to overlay the gameplay branch beneath it. canvas_height defaults
+to 1920 (standard vertical short).
 """
 import json
 import subprocess
@@ -14,9 +30,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+CANVAS_W = 1080
+
 
 def main():
     segments_path, raw_src, out_path, gameplay_filter, facecam_filter = sys.argv[1:6]
+    facecam_height = int(sys.argv[6])
+    canvas_height = int(sys.argv[7]) if len(sys.argv) > 7 else 1920
     segments = json.loads(Path(segments_path).read_text(encoding="utf-8"))
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -28,12 +48,14 @@ def main():
             part_path = tmp / f"part{i}.mp4"
             print(f"compositing segment {i+1}/{len(segments)} ({start}-{end}, {dur:.1f}s)")
             cmd = [
-                "ffmpeg", "-y", "-ss", str(start), "-i", raw_src, "-t", str(dur),
+                "ffmpeg", "-nostdin", "-y", "-ss", str(start), "-i", raw_src, "-t", str(dur),
                 "-filter_complex",
+                f"color=c=black:s={CANVAS_W}x{canvas_height}:d={dur}:r=30[bg];"
                 f"[0:v]{gameplay_filter}[gameplay];"
                 f"[0:v]{facecam_filter}[facecam];"
-                f"[facecam][gameplay]vstack=inputs=2[outv]",
-                "-map", "[outv]", "-map", "0:a",
+                f"[bg][facecam]overlay=0:0[tmp];"
+                f"[tmp][gameplay]overlay=0:{facecam_height}[outv]",
+                "-map", "[outv]", "-map", "0:a:0",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "18",
                 "-c:a", "aac", "-b:a", "192k",
                 str(part_path), "-loglevel", "error",
@@ -48,7 +70,7 @@ def main():
         total = sum(seg["end"] - seg["start"] for seg in segments)
         print(f"total kept duration: {total:.2f} s across {len(segments)} segments")
         subprocess.run(
-            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_path),
+            ["ffmpeg", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", str(list_path),
              "-c", "copy", out_path, "-loglevel", "error"],
             check=True,
         )

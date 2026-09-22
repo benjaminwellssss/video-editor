@@ -609,8 +609,19 @@ explicit `"fx"` dict, which wins. Effects apply to that card's caption only,
 never to the video. The renderer also strips any `*...*` still sitting inside
 `lines` (older files), so a note can never be drawn.
 
-**Overlapping cards:** the newest-started card wins and the older one never
-comes back (the same rule as the editor's preview). This matters because a
+**Simultaneous captions (`"lane"`, added 2026-09-19):** the editor has a
+timeline panel with a lane per row (start with one, "🕒+ Timeline" adds more;
+captions can be dragged in time and between lanes, bumped with the arrow keys).
+Each card saves a `"lane"` (0-based, omitted for lane 0). `render_captions.py`
+draws lane 0 as the big main caption on the seam and every further lane
+smaller, stacked underneath, so several speakers can be on screen at once;
+per-card `fill` (speaker color), `note` effects and `emphasis_scale` work on
+every lane. A lane showing alone anchors to the seam. This is the layout to
+use when the user says two people are talking over each other — put each
+speaker on their own lane rather than trying to interleave them.
+
+**Overlapping cards** (within one lane): the newest-started card wins and the
+older one never comes back (the same rule as the editor's preview). This matters because a
 word held long by the aligner overlaps its neighbours, and hand-edited
 timings can too — check overlaps in a user's file before assuming a card
 will show. Untagged cards (no `speaker`/`fill`) render white; don't guess
@@ -631,6 +642,36 @@ captions *the pipeline generated*, where nobody has yet listened and decided.
 The one allowed exception is mechanical: a renderer behaviour that would make
 the render differ from what the user saw in the editor preview (e.g. overlapping
 cards) gets fixed in the renderer, in the user's favour, silently.
+
+### This machine's ffmpeg build: two silent-failure gotchas (found 2026-09-21)
+
+The installed ffmpeg (`gyan.dev` full_build, built with `--disable-w32threads`)
+has two real bugs that don't announce themselves as errors — both were found
+building shorts for the 09-19 stream, and both are now fixed in
+`build_custom_crop_short.py` and `build_jumpcut_short.py`, but watch for
+either symptom in any *new* ffmpeg filter graph on this machine:
+
+- **`vstack` fed by two crop+scale branches of the same input segfaults.**
+  Reproduced down to a minimal case (matching widths, a 5s clip, a shallow
+  seek) — not a scale-mismatch or large-file-seek problem, and not fixed by
+  an explicit `split` filter instead of implicitly referencing `[0:v]` twice,
+  or by forcing `-threads 1`. `overlay` onto a black canvas with the exact
+  same crop/scale filters works fine and is what both short-builder scripts
+  use now (`color=...[bg];[bg][facecam]overlay=0:0[tmp];[tmp][gameplay]overlay=0:<seam_y>[outv]`).
+  A `subprocess.run(..., check=True)` call surfaces this as a normal-looking
+  `CalledProcessError` with exit code 3221226356 (0xC0000005) on Windows —
+  recognize that exit code as this bug, not a memory/OOM issue.
+- **`color=c=...:s=WxH:d=N` with no `:r=` defaults to 25fps**, and because it
+  was the first input in the filter graph, the whole composited output
+  silently became 25fps even though the source is 30fps — `ffprobe`'s
+  `duration` field still read correct (frames-so-far / stated-fps happens to
+  work out), so this only shows up by checking `r_frame_rate`/`avg_frame_rate`
+  directly, not by checking duration alone. **Always pass `:r=30` (or
+  whatever the project's actual rate is) on every `color=` source**, and
+  spot-check `ffprobe -select_streams v:0 -show_entries
+  stream=r_frame_rate` on a freshly-built short before trusting it — a
+  quiet frame-rate downgrade like this will desync anything timed
+  separately (a caption overlay rendered at the correct 30fps, for one).
 
 ### Resolve free-edition limitations (why ffmpeg does so much of this)
 

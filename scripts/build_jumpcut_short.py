@@ -60,7 +60,15 @@ import tempfile
 # ever changes.
 GAMEPLAY_CROP = "crop=911:1056:504:24,scale=1080:1260"
 FACECAM_CROP = "crop=460:342:1460:738,scale=1080:803,crop=1080:660:0:71"
-SEAM_Y = 660  # facecam height; gameplay is cropped/scaled to 1920-SEAM_Y so vstack is exact
+SEAM_Y = 660  # facecam height; gameplay is cropped/scaled to 1920-SEAM_Y, composited at this y
+
+# Compositing uses `overlay` onto a black canvas, not `vstack`. Confirmed
+# 2026-09-21: this machine's ffmpeg build (gyan.dev, --disable-w32threads)
+# segfaults on vstack fed by two crop+scale branches of the same input, down
+# to a minimal repro (matching widths, short clip, shallow seek — not a
+# scale-mismatch or large-file-seek issue). overlay with identical filters
+# works. Don't switch back to vstack without testing on this exact ffmpeg
+# build first.
 
 # Full-screen facecam takeover (for a direct-to-camera moment): crop a 9:16
 # slice out of the same webcam box (full 342px height, centered 192px-wide
@@ -99,9 +107,11 @@ def build_segment(src, seg, out_path):
         base = f"[0:v]{FACECAM_FULL_CROP}[base]"
     else:
         base = (
+            f"color=c=black:s=1080x1920:d={dur}:r=30[bg];"
             f"[0:v]{GAMEPLAY_CROP}[gameplay];"
             f"[0:v]{FACECAM_CROP}[facecam];"
-            f"[facecam][gameplay]vstack=inputs=2[base]"
+            f"[bg][facecam]overlay=0:0[tmp];"
+            f"[tmp][gameplay]overlay=0:{SEAM_Y}[base]"
         )
     punch = seg.get("punch")
     if punch:
@@ -110,7 +120,7 @@ def build_segment(src, seg, out_path):
         filter_complex = f"{base};[base]null[outv]"
 
     cmd = [
-        "ffmpeg", "-y",
+        "ffmpeg", "-nostdin", "-y",
         "-ss", str(seg["start"]), "-t", str(dur), "-i", src,
         "-filter_complex", filter_complex,
         "-map", "[outv]", "-map", "0:a:0",
@@ -144,7 +154,7 @@ def main():
                 f.write(f"file '{sf}'\n")
 
         cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+            "ffmpeg", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", list_path,
             "-c", "copy", out_path, "-loglevel", "warning",
         ]
         r = subprocess.run(cmd)
