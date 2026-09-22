@@ -547,6 +547,42 @@ mention it when reporting a finished video so a missing one is noticed.
   frame edge — that is in the raw footage, not something the pipeline
   added.
 
+### `caption_fx.py` note vocabulary (2026-09-22)
+
+Beyond the original grow/zoom/shake/vibrate + intensity words, editor notes
+(`*like this*` in the caption editor, stored as `card["note"]`) also support:
+
+- **A color word** (red/green/blue/yellow/orange/purple/pink/white/black/
+  cyan) overrides that card's text fill, on top of any motion effect —
+  "red font, ANGRY SHAKING" gets both.
+- **glow/shine/holy/neon/radiant/halo** — a brief radiant flash behind the
+  text (rises over 0.12s, fades across the rest of the card). Uses the
+  note's color if one's also given, else a warm gold-white.
+- **dance/bounce/groove/wiggle** — a smooth vertical bob, distinct from
+  shake's jitter.
+- **A ramp across several cards**: a note containing progressively/
+  gradually/increasingly ramps its effect linearly across itself and every
+  contiguous following card that shares the same effect key, peaking at
+  whatever's the strongest intensity word anywhere in that run (add
+  "maximum"/"max" to a later card to set the peak explicitly).
+- **"make all instances of "X, Y" do a &lt;effect&gt;"** (or "every/
+  whenever/any time it says") — applies that effect to every card in the
+  lane whose text is one of the named words, anywhere in the timeline, not
+  just cards after the instruction.
+- **A bare URL** in a note requests an image/gif overlaid near the caption.
+  render_captions.py never fetches it itself (downloading from an external
+  site needs explicit go-ahead first) — it looks for the file already
+  cached at `<shorts-dir>/note_images/<sha1-of-url-16>.{png,gif,jpg,jpeg,
+  webp}` and skips with a printed path if it isn't there yet. "until the
+  end (of the video)" makes it persist to the short's end, otherwise it
+  shows for 3s from the card's start; "above"/"over" vs "under"/"below"/
+  "beneath" picks which side of the caption bar it sits on (default below).
+  To actually include one: download the image (with the user's go-ahead,
+  since it's an external fetch), save it to that path, and re-render.
+
+All of the above is still subject to the "note with nothing recognised ->
+NOT UNDERSTOOD, reported, never silently dropped" rule.
+
 ### Captions after the user hand-edits a short in Resolve
 
 Sometimes the user takes a finished short into Resolve to tweak audio/music

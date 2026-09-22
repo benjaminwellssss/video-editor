@@ -21,14 +21,16 @@ cards.json is either:
   color-code single-word caption cards by diarized speaker (see
   build_speaker_colors.py). Stroke/extrude shadow stay black regardless.
 """
+import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from caption_fx import describe, fx_from_note
+from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction
 
 W, H = 1080, 1920
 FPS = 30
@@ -391,6 +393,71 @@ def fx_shake(fx, t):
     return int(round(dx)), int(round(dy)), angle
 
 
+def fx_dance(fx, t, card):
+    """A smooth vertical bob (distinct from shake's jitter) — deterministic
+    in t relative to the card's own start, so it always begins at rest."""
+    amp = fx.get("dance_px", 0)
+    if not amp:
+        return 0
+    hz = fx.get("dance_hz", 2.2)
+    u = t - card["start"]
+    return int(round(amp * math.sin(2 * math.pi * hz * u)))
+
+
+def fx_glow_alpha(fx, t, card):
+    """0..1 opacity for a brief, dramatic flash: snaps in fast, fades across
+    the rest of the card's time on screen."""
+    if not fx.get("glow"):
+        return 0.0
+    u = t - card["start"]
+    rise = 0.12
+    if u < rise:
+        return max(0.0, u / rise)
+    dur = max(card["end"] - card["start"], 0.05)
+    fade_dur = max(dur - rise, 0.05)
+    return max(0.0, 1.0 - (u - rise) / fade_dur)
+
+
+def make_glow(img, color, alpha):
+    """A blurred, tinted silhouette of img's alpha shape, for compositing
+    behind it as a radiant glow."""
+    silhouette = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    silhouette.paste(Image.new("RGBA", img.size, tuple(color)), (0, 0), img.getchannel("A"))
+    pad = 40
+    canvas = Image.new("RGBA", (img.width + pad * 2, img.height + pad * 2), (0, 0, 0, 0))
+    canvas.alpha_composite(silhouette, (pad, pad))
+    blurred = canvas.filter(ImageFilter.GaussianBlur(radius=18))
+    r, g, b, a = blurred.split()
+    a = a.point(lambda v: int(v * alpha))
+    blurred.putalpha(a)
+    return blurred
+
+
+def load_cached_image(url, cache_dir):
+    """The frames (+ per-frame duration in ms) of an image a note asked to
+    overlay, IF it's already been downloaded to cache_dir under a hash of
+    its URL — animated GIFs play back at their own timing, looped; a static
+    image is just a 1-frame "animation". Never fetches it itself —
+    downloading from an external site is a separate, explicit step — so a
+    not-yet-cached URL just gets reported and skipped rather than blocking
+    the render."""
+    h = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    for ext in (".gif", ".webp", ".png", ".jpg", ".jpeg"):
+        p = os.path.join(cache_dir, h + ext)
+        if os.path.exists(p):
+            im = Image.open(p)
+            n_frames = getattr(im, "n_frames", 1)
+            frames, durations = [], []
+            for i in range(n_frames):
+                im.seek(i)
+                frames.append(im.convert("RGBA").copy())
+                durations.append(max(im.info.get("duration", 100), 20))
+            return frames, durations
+    print(f'  image overlay requested but not fetched yet: {url}')
+    print(f'    -> save it as {os.path.join(cache_dir, h + ".gif")} (or .png/.jpg/.webp) and re-render to include it')
+    return None, None
+
+
 def composite_clipped(frame, img, x, y):
     """alpha_composite that tolerates img hanging off the frame (shaken or
     zoomed captions can cross the edge)."""
@@ -430,6 +497,7 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
     if fx:
         scale *= fx_scale(fx, t, card)
         dx, dy, angle = fx_shake(fx, t)
+        dy += fx_dance(fx, t, card)
     block, top_center_y, bottom_edge_y = compose_card(card, t, style, cache)
     nw = max(1, int(block.width * scale))
     nh = max(1, int(block.height * scale))
@@ -443,20 +511,144 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
         resized = resized.rotate(angle, resample=Image.BICUBIC, expand=True)
         paste_x -= (resized.width - nw) // 2
         paste_y -= (resized.height - nh) // 2
+    if fx.get("glow"):
+        glow_a = fx_glow_alpha(fx, t, card)
+        if glow_a > 0.01:
+            glow_img = make_glow(resized, fx.get("color") or (255, 248, 210, 255), glow_a)
+            gx = paste_x - (glow_img.width - resized.width) // 2
+            gy = paste_y - (glow_img.height - resized.height) // 2
+            composite_clipped(frame, glow_img, gx + dx, gy + dy)
     composite_clipped(frame, resized, paste_x + dx, paste_y + dy)
     return canvas_y + bottom_edge_y * scale
+
+
+RAMPABLE_KEYS = ("shake_px", "scale_to", "dance_px")
+
+
+def apply_fx_passes(cards, lane_no):
+    """Three passes over one lane's cards, each layered on the last:
+    1. each card's own note -> fx (or its explicit "fx" dict, unchanged).
+    2. "make all instances of "X" do a <effect>" notes apply that effect to
+       every card in the lane whose text is one of the named words, anywhere
+       in the timeline — not just cards after the instruction.
+    3. a progressively/gradually/increasingly note ramps its effect linearly
+       across itself and every contiguous following card that shares the
+       same effect key, peaking at the strongest intensity word found
+       anywhere in that run.
+    Then applies any note-driven color override to card["fill"], and logs
+    each note's final, resolved effect."""
+    for card in cards:
+        card["_fx"] = dict(card.get("fx") or fx_from_note(card.get("note")))
+
+    for card in cards:
+        parsed = parse_global_instruction(card.get("note"))
+        if not parsed:
+            continue
+        targets, effect_note = parsed
+        target_fx = fx_from_note(effect_note)
+        if not target_fx:
+            continue
+        target_set = set(targets)
+        for other in cards:
+            text_words = set(re.findall(r"[a-z']+", " ".join(other.get("lines", [])).lower()))
+            if text_words & target_set:
+                merged = dict(target_fx)
+                merged.update(other["_fx"])  # that card's own note wins on shared keys
+                other["_fx"] = merged
+
+    for i, card in enumerate(cards):
+        if not is_ramp_trigger(card.get("note")):
+            continue
+        keys = [k for k in RAMPABLE_KEYS if card["_fx"].get(k)]
+        if not keys:
+            continue
+        group = [card]
+        j = i + 1
+        while j < len(cards):
+            nxt = cards[j]
+            if nxt["start"] - group[-1]["end"] > 1.0 or not all(nxt["_fx"].get(k) for k in keys):
+                break
+            group.append(nxt)
+            j += 1
+        if len(group) < 2:
+            continue
+        start_factor = note_factor(card.get("note"))
+        end_factor = max((note_factor(c.get("note")) for c in group), default=start_factor)
+        if end_factor <= start_factor:
+            end_factor = min(start_factor * 1.5, MAX_FACTOR)
+        ratio = end_factor / start_factor if start_factor else 1.0
+        n = len(group)
+        for k in keys:
+            start_val = group[0]["_fx"][k]
+            end_val = 1.0 + (start_val - 1.0) * ratio if k == "scale_to" else start_val * ratio
+            for gi, gcard in enumerate(group):
+                gcard["_fx"][k] = start_val + (end_val - start_val) * (gi / (n - 1))
+
+    for card in cards:
+        if card["_fx"].get("color"):
+            card["fill"] = list(card["_fx"]["color"])
+        if card.get("note"):
+            print(f'  note (lane {lane_no + 1}) @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
+
+
+def gather_image_overlays(lanes, cards_path, duration_s):
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(cards_path)), "note_images")
+    overlays = []
+    cache = {}  # url -> (resized_frames, durations, total_ms), computed once per URL
+    for cards in lanes:
+        for card in cards:
+            fx = card["_fx"]
+            url = fx.get("image_url")
+            if not url:
+                continue
+            if url not in cache:
+                os.makedirs(cache_dir, exist_ok=True)
+                frames, durations = load_cached_image(url, cache_dir)
+                if frames is not None:
+                    target_w = int(W * 0.55)
+                    resized = [f.resize((target_w, int(f.height * target_w / f.width)), Image.LANCZOS) for f in frames]
+                    cache[url] = (resized, durations, sum(durations))
+                else:
+                    cache[url] = None
+            entry = cache[url]
+            if entry is None:
+                continue
+            frames, durations, total_ms = entry
+            start = card["start"]
+            end = duration_s if fx["image_duration"] == "end" else min(duration_s, start + fx["image_duration"])
+            overlays.append({
+                "start": start, "end": end, "frames": frames, "durations": durations,
+                "total_ms": total_ms, "position": fx["image_position"],
+            })
+    return overlays
+
+
+def draw_image_overlay(frame, ov, t):
+    frames = ov["frames"]
+    if len(frames) == 1:
+        img = frames[0]
+    else:
+        elapsed_ms = ((t - ov["start"]) * 1000.0) % ov["total_ms"]
+        acc = 0.0
+        img = frames[-1]
+        for f, d in zip(frames, ov["durations"]):
+            acc += d
+            if elapsed_ms < acc:
+                img = f
+                break
+    ox = (W - img.width) // 2
+    oy = BAR_CENTER_Y + 260 if ov["position"] == "below" else BAR_CENTER_Y - 260 - img.height
+    composite_clipped(frame, img, ox, oy)
 
 
 def main():
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
     lanes = split_lanes(json.load(open(cards_path, encoding="utf-8")))
     for li, cards in enumerate(lanes):
-        for card in cards:
-            card["_fx"] = card.get("fx") or fx_from_note(card.get("note"))
-            if card.get("note"):
-                print(f'  note (lane {li + 1}) @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
+        apply_fx_passes(cards, li)
     if len(lanes) > 1:
         print(f"  {len(lanes)} simultaneous lanes: " + ", ".join(str(len(c)) for c in lanes) + " cards")
+    image_overlays = gather_image_overlays(lanes, cards_path, duration_s)
     total_frames = int(round(duration_s * FPS))
 
     cache = {}
@@ -484,6 +676,10 @@ def main():
                 # stack below whatever is showing above it, else on the seam
                 base = bottom if bottom is not None else BAR_CENTER_Y
                 bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=base)
+
+        for ov in image_overlays:
+            if ov["start"] <= t < ov["end"]:
+                draw_image_overlay(frame, ov, t)
 
         frame_bytes = frame.tobytes()
         ff.stdin.write(frame_bytes)

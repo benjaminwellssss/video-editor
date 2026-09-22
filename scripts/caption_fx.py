@@ -6,20 +6,39 @@ vibrate of the text"); this reads it at render time, so re-editing the note
 in the editor and re-rendering is all it takes. A card may instead carry an
 explicit "fx" dict, which wins over the note.
 
-Effects (they apply to that card's caption only, never the video):
+Per-card effects (they apply to that card's caption only, never the video):
   grow / bigger / swell  - scale up slowly across the card's whole time on screen
   zoom / punch           - scale up fast (punches to size in the first third)
   impact                 - alone: a fast punch-in; with other words: makes them 1.3x stronger
   shake / rumble         - jitter position at ~24 Hz (big amplitudes also rock/rotate)
   vibrate / jitter       - small fast jitter at ~34 Hz (8 px at 1x)
+  dance / bounce / groove/wiggle - a smooth vertical bob (not jittery like shake)
+  glow / shine / holy / neon / radiant / halo - a brief radiant flash behind the text
+  a color word (red/green/blue/yellow/orange/purple/pink/white/black/cyan)
+    - overrides that card's text color, on top of any of the above
+  a bare http(s) URL     - overlay that image/gif near the caption; "until
+    the end (of the video)" makes it persist to the end, otherwise it shows
+    for a few seconds. "above"/"below" (or under/over/beneath) sets which
+    side of the caption it sits on (default: below).
 
-Intensity words multiply the effect: gentle/slight/subtle/soft 0.5x,
-"very" 1.3x, "extremely"/huge/massive 1.5x, violent/hard/intense/heavy 2x
-(so "extremely violent" is 3x, the cap). No intensity word = 1x.
+Intensity words multiply the effect: gentle/slight/subtle/soft/little 0.5x,
+"very" 1.3x, "extremely"/huge/massive 1.5x, violent/hard/intense/heavy 2x,
+maximum/max 3x (the cap). No intensity word = 1x.
 
-A note with no recognised effect word returns no fx and is reported by
-describe(), so an instruction the renderer can't do is never silently
-dropped — it comes back to a human (or Claude) to handle by hand.
+Two cross-card mechanisms, applied by render_captions.py using the helpers
+below (not by fx_from_note itself, since they need to see the whole card
+list for a lane):
+  - a note containing progressively/gradually/increasingly marks the start
+    of a RAMP: the triggering effect ramps up linearly across it and every
+    contiguous following card that shares the same effect, ending at
+    whatever's the strongest intensity word found anywhere in that run.
+  - "make all instances of "X, Y" do a <effect>" (or "every/whenever/any
+    time it says") applies <effect> to every card in the lane whose text
+    is one of the quoted words, wherever it appears in the timeline.
+
+A note with no recognised effect word, color, or URL returns no fx and is
+reported by describe(), so an instruction the renderer can't do is never
+silently dropped - it comes back to a human (or Claude) to handle by hand.
 """
 import re
 
@@ -27,25 +46,84 @@ SCALE_SLOW = {"grow", "growing", "grows", "bigger", "swell", "enlarge", "expand"
 SCALE_FAST = {"zoom", "zooming", "punch", "push", "pop", "slam"}
 SHAKE = {"shake", "shaking", "rumble", "quake", "camera-shake"}
 VIBRATE = {"vibrate", "vibrating", "vibration", "jitter", "tremble", "buzz"}
+DANCE = {"dance", "dancing", "bop", "bopping", "bounce", "bouncing", "groove", "grooving", "wiggle", "wiggling"}
+GLOW = {"glow", "glowing", "holy", "shine", "shining", "radiant", "neon", "halo"}
+
+COLOR_WORDS = {
+    "red": (230, 40, 40, 255),
+    "green": (80, 230, 90, 255),
+    "blue": (70, 140, 255, 255),
+    "yellow": (255, 210, 0, 255),
+    "orange": (255, 140, 40, 255),
+    "purple": (170, 90, 255, 255),
+    "pink": (255, 110, 190, 255),
+    "white": (255, 255, 255, 255),
+    "black": (25, 25, 25, 255),
+    "cyan": (70, 220, 220, 255),
+}
 
 INTENSITY = {
-    "gentle": 0.5, "gently": 0.5, "slight": 0.5, "slightly": 0.5, "subtle": 0.5, "soft": 0.5, "light": 0.5,
+    "gentle": 0.5, "gently": 0.5, "slight": 0.5, "slightly": 0.5, "subtle": 0.5, "soft": 0.5, "light": 0.5, "little": 0.5,
     "very": 1.3, "impact": 1.3, "extremely": 1.5, "extreme": 1.5, "insane": 1.5, "insanely": 1.5, "massive": 1.5, "huge": 1.5,
     "violent": 2.0, "violently": 2.0, "hard": 2.0, "intense": 2.0, "intensely": 2.0, "aggressive": 2.0, "heavy": 2.0,
+    "maximum": 3.0, "max": 3.0,
 }
 MAX_FACTOR = 3.0
 MAX_SCALE = 1.9
+
+RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasingly", "increasing"}
+
+URL_RE = re.compile(r"https?://\S+")
+GLOBAL_RE = re.compile(
+    r'(?:make\s+all\s+instances\s+of|every\s+time\s+it\s+says|whenever\s+it\s+says|any\s+time\s+it\s+says)'
+    r'\s+["“]([^"”]+)["”]\s+do\s+(?:a\s+|an\s+)?(.+)',
+    re.I,
+)
+
+
+def _words(note):
+    return set(re.findall(r"[a-z]+(?:-[a-z]+)?", note.lower()))
+
+
+def note_factor(note):
+    """The plain intensity multiplier a note carries (product of all
+    intensity words found, capped at MAX_FACTOR), independent of which
+    effect(s) it goes with. Used to compute ramps across several cards."""
+    if not note:
+        return 1.0
+    factor = 1.0
+    for w in _words(note) & INTENSITY.keys():
+        factor *= INTENSITY[w]
+    return min(factor, MAX_FACTOR)
+
+
+def is_ramp_trigger(note):
+    if not note:
+        return False
+    return bool(_words(note) & RAMP_WORDS)
+
+
+def parse_global_instruction(note):
+    """Return (target_words, effect_note) for a 'make all instances of "X,
+    Y" do a <effect>' style note, or None if the note isn't one of these."""
+    if not note:
+        return None
+    m = GLOBAL_RE.search(note)
+    if not m:
+        return None
+    targets_raw, effect_note = m.groups()
+    targets = [w for w in re.findall(r"[a-z']+", targets_raw.lower()) if w != "and"]
+    if not targets:
+        return None
+    return targets, effect_note.strip()
 
 
 def fx_from_note(note):
     """Return an fx dict for the note, or {} if nothing in it is recognised."""
     if not note:
         return {}
-    words = set(re.findall(r"[a-z]+(?:-[a-z]+)?", note.lower()))
-    factor = 1.0
-    for w in words & INTENSITY.keys():
-        factor *= INTENSITY[w]
-    factor = min(factor, MAX_FACTOR)
+    words = _words(note)
+    factor = note_factor(note)
 
     fx = {}
     if words & SCALE_SLOW:
@@ -61,9 +139,29 @@ def fx_from_note(note):
         fx["shake_hz"] = 34.0
     elif words & VIBRATE:
         fx["shake_px"] = max(fx["shake_px"], 8.0 * factor)
+    if words & DANCE:
+        fx["dance_px"] = 14.0 * factor
+        fx["dance_hz"] = 2.2
+    if words & GLOW:
+        fx["glow"] = True
     if not fx and "impact" in words:  # "impact" on its own = a fast punch-in
         fx["scale_to"] = min(1.0 + 0.35 * factor, MAX_SCALE)
         fx["scale_fast"] = True
+
+    color_hit = words & COLOR_WORDS.keys()
+    if color_hit:
+        fx["color"] = COLOR_WORDS[sorted(color_hit)[0]]
+
+    m = URL_RE.search(note)
+    if m:
+        fx["image_url"] = m.group(0).rstrip(").,”’")
+        low = note.lower()
+        fx["image_duration"] = "end" if ("until the end" in low or "until end" in low or "rest of the video" in low) else 3.0
+        if any(w in low for w in ("above", "over")):
+            fx["image_position"] = "above"
+        else:
+            fx["image_position"] = "below"  # default, also covers under/below/beneath
+
     return fx
 
 
@@ -75,4 +173,13 @@ def describe(note, fx):
         parts.append(f'{"fast zoom" if fx.get("scale_fast") else "slow grow"} to {fx["scale_to"]:.2f}x')
     if "shake_px" in fx:
         parts.append(f'shake {fx["shake_px"]:.0f}px @ {fx["shake_hz"]:.0f}Hz')
+    if "dance_px" in fx:
+        parts.append(f'dance {fx["dance_px"]:.0f}px @ {fx["dance_hz"]:.1f}Hz')
+    if fx.get("glow"):
+        parts.append("glow flash")
+    if "color" in fx:
+        parts.append(f'color -> rgba{tuple(fx["color"])}')
+    if "image_url" in fx:
+        dur = "until end of video" if fx["image_duration"] == "end" else f'{fx["image_duration"]:.0f}s'
+        parts.append(f'image overlay ({fx["image_position"]}, {dur}): {fx["image_url"]}')
     return ", ".join(parts) + f' <- "{note}"'
