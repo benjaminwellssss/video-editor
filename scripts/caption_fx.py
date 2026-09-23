@@ -18,8 +18,14 @@ Per-card effects (they apply to that card's caption only, never the video):
     - overrides that card's text color, on top of any of the above
   a bare http(s) URL     - overlay that image/gif near the caption; "until
     the end (of the video)" makes it persist to the end, otherwise it shows
-    for a few seconds. "above"/"below" (or under/over/beneath) sets which
-    side of the caption it sits on (default: below).
+    for a few seconds. Where it starts (its resting position - there's no
+    slide-in animation for a note-driven overlay, just where it appears):
+    a grid phrase like "top left", "middle right", "bottom center",
+    "dead center", or a single "top"/"bottom"/"left"/"right"/"center"
+    anchors it to that spot on the full frame; "above"/"below" (or
+    under/over/beneath), with no grid phrase present, instead anchors it
+    relative to the caption itself (default: below). Grid phrases win if
+    both appear.
 
 Intensity words multiply the effect: gentle/slight/subtle/soft/little 0.5x,
 "very" 1.3x, "extremely"/huge/massive 1.5x, violent/hard/intense/heavy 2x,
@@ -74,6 +80,42 @@ MAX_SCALE = 1.9
 RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasingly", "increasing"}
 
 URL_RE = re.compile(r"https?://\S+")
+
+# Absolute on-screen anchor for a note-driven image overlay - checked longest
+# (most specific) phrase first so "top left" doesn't get shadowed by a bare
+# "top" match. Values are (vertical, horizontal) grid positions.
+POSITION_PHRASES = [
+    ("top left", ("top", "left")), ("top-left", ("top", "left")),
+    ("top right", ("top", "right")), ("top-right", ("top", "right")),
+    ("top center", ("top", "center")), ("top middle", ("top", "center")), ("top-center", ("top", "center")),
+    ("bottom left", ("bottom", "left")), ("bottom-left", ("bottom", "left")),
+    ("bottom right", ("bottom", "right")), ("bottom-right", ("bottom", "right")),
+    ("bottom center", ("bottom", "center")), ("bottom middle", ("bottom", "center")), ("bottom-center", ("bottom", "center")),
+    ("middle left", ("middle", "left")), ("center left", ("middle", "left")), ("middle-left", ("middle", "left")),
+    ("middle right", ("middle", "right")), ("center right", ("middle", "right")), ("middle-right", ("middle", "right")),
+    ("dead center", ("middle", "center")), ("dead centre", ("middle", "center")),
+    ("centered", ("middle", "center")), ("centred", ("middle", "center")),
+    ("middle center", ("middle", "center")),
+]
+POSITION_SINGLE = {
+    "top": ("top", "center"), "bottom": ("bottom", "center"),
+    "left": ("middle", "left"), "right": ("middle", "right"),
+    "center": ("middle", "center"), "centre": ("middle", "center"), "middle": ("middle", "center"),
+}
+
+
+def parse_image_position(note):
+    """An absolute (vertical, horizontal) grid anchor named in the note -
+    "top left", "middle right", "bottom center", "dead center", or a bare
+    "top"/"bottom"/"left"/"right"/"center" - or None if it doesn't name one."""
+    low = note.lower()
+    for phrase, pos in POSITION_PHRASES:
+        if phrase in low:
+            return pos
+    for w in _words(note):
+        if w in POSITION_SINGLE:
+            return POSITION_SINGLE[w]
+    return None
 GLOBAL_RE = re.compile(
     r'(?:make\s+all\s+instances\s+of|every\s+instance\s+of|every\s+time\s+it\s+says|'
     r'whenever\s+it\s+says|any\s+time\s+it\s+says)'
@@ -167,8 +209,11 @@ def fx_from_note(note):
         fx["image_url"] = m.group(0).rstrip(").,”’")
         low = note.lower()
         fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else 3.0
-        if any(w in low for w in ("above", "over")):
-            fx["image_position"] = "above"
+        grid = parse_image_position(note)
+        if grid:
+            fx["image_position"] = grid  # absolute (vertical, horizontal) anchor on the full frame
+        elif any(w in low for w in ("above", "over")):
+            fx["image_position"] = "above"  # relative to the caption, legacy default
         else:
             fx["image_position"] = "below"  # default, also covers under/below/beneath
 
@@ -191,5 +236,7 @@ def describe(note, fx):
         parts.append(f'color -> rgba{tuple(fx["color"])}')
     if "image_url" in fx:
         dur = "until end of video" if fx["image_duration"] == "end" else f'{fx["image_duration"]:.0f}s'
-        parts.append(f'image overlay ({fx["image_position"]}, {dur}): {fx["image_url"]}')
+        pos = fx["image_position"]
+        pos_str = " ".join(pos) if isinstance(pos, tuple) else pos
+        parts.append(f'image overlay ({pos_str}, {dur}): {fx["image_url"]}')
     return ", ".join(parts) + f' <- "{note}"'

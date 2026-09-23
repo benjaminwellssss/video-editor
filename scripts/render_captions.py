@@ -636,8 +636,16 @@ def draw_image_overlay(frame, ov, t):
             if elapsed_ms < acc:
                 img = f
                 break
-    ox = (W - img.width) // 2
-    oy = BAR_CENTER_Y + 260 if ov["position"] == "below" else BAR_CENTER_Y - 260 - img.height
+    pos = ov["position"]
+    if isinstance(pos, tuple):
+        # absolute (vertical, horizontal) grid anchor on the full frame
+        v, h, margin = pos[0], pos[1], 24
+        ox = margin if h == "left" else W - img.width - margin if h == "right" else (W - img.width) // 2
+        oy = margin if v == "top" else H - img.height - margin if v == "bottom" else (H - img.height) // 2
+    else:
+        # legacy: relative to the caption bar
+        ox = (W - img.width) // 2
+        oy = BAR_CENTER_Y + 260 if pos == "below" else BAR_CENTER_Y - 260 - img.height
     composite_clipped(frame, img, ox, oy)
 
 
