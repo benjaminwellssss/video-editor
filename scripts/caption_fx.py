@@ -31,7 +31,7 @@ Intensity words multiply the effect: gentle/slight/subtle/soft/little 0.5x,
 "very" 1.3x, "extremely"/huge/massive 1.5x, violent/hard/intense/heavy 2x,
 maximum/max 3x (the cap). No intensity word = 1x.
 
-Two cross-card mechanisms, applied by render_captions.py using the helpers
+Three cross-card mechanisms, applied by render_captions.py using the helpers
 below (not by fx_from_note itself, since they need to see the whole card
 list for a lane):
   - a note containing progressively/gradually/increasingly marks the start
@@ -41,6 +41,15 @@ list for a lane):
   - "make all instances of "X, Y" do a <effect>" (or "every/whenever/any
     time it says") applies <effect> to every card in the lane whose text
     is one of the quoted words, wherever it appears in the timeline.
+  - a note naming a screen position for the CAPTION TEXT itself - "near the
+    bottom", "under my face", "under my chin" (bottom anchor, for a
+    full-facecam segment where the normal seam position would sit over the
+    subject's face) or "centered again"/"back to normal"/bare "centered"
+    (back to the normal seam anchor) - PERSISTS from that card onward until
+    the next such note, the same way a hand-editor would expect "make
+    everything from here down sit lower" to work. This is distinct from a
+    note's image-overlay position (parse_image_position above), which only
+    ever places that one note's image and never moves the caption text.
 
 A note with no recognised effect word, color, or URL returns no fx and is
 reported by describe(), so an instruction the renderer can't do is never
@@ -102,6 +111,40 @@ POSITION_SINGLE = {
     "left": ("middle", "left"), "right": ("middle", "right"),
     "center": ("middle", "center"), "centre": ("middle", "center"), "middle": ("middle", "center"),
 }
+
+
+# Persisting anchor for the CAPTION TEXT itself - checked as phrases first
+# (most specific) then bare single words, same pattern as the image-position
+# parser above but a completely separate concern (moves the caption block,
+# not a note's image overlay).
+TEXT_POSITION_PHRASES = [
+    ("near the bottom", "bottom"), ("under my face", "bottom"), ("under the face", "bottom"),
+    ("under my chin", "bottom"), ("under the chin", "bottom"), ("lower third", "bottom"),
+    ("bottom of the screen", "bottom"), ("bottom of screen", "bottom"),
+    ("centered again", "default"), ("center again", "default"), ("centred again", "default"),
+    ("back to normal", "default"), ("back to center", "default"), ("back to centered", "default"),
+    ("back to centre", "default"), ("back to the seam", "default"), ("back to the middle", "default"),
+    ("normal position", "default"), ("default position", "default"), ("normal again", "default"),
+]
+TEXT_POSITION_SINGLE = {"bottom": "bottom", "centered": "default", "centred": "default", "center": "default"}
+
+
+def parse_text_position(note):
+    """A persisting on-screen anchor for the caption TEXT itself ('bottom' or
+    'default'), or None if the note doesn't mention one. See the module
+    docstring's cross-card mechanisms section - the caller (render_captions.py)
+    carries the last-seen value forward across cards, this function only
+    reads one note."""
+    if not note:
+        return None
+    low = note.lower()
+    for phrase, val in TEXT_POSITION_PHRASES:
+        if phrase in low:
+            return val
+    for w in _words(note):
+        if w in TEXT_POSITION_SINGLE:
+            return TEXT_POSITION_SINGLE[w]
+    return None
 
 
 def parse_image_position(note):

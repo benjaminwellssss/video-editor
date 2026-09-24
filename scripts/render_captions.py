@@ -30,7 +30,7 @@ import subprocess
 import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction
+from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
 
 W, H = 1080, 1920
 FPS = 30
@@ -38,7 +38,8 @@ FONT_PATH = r"C:\Users\Bem\Desktop\video-editor\assets\fonts\BebasNeue-Regular.t
 EMOJI_FONT_PATH = r"C:\Windows\Fonts\seguiemj.ttf"
 FONT_SIZE = 150
 FONT_SIZE_SECONDARY = 75  # 50% size, matching render_handle.py's established scale-down
-BAR_CENTER_Y = 660  # seam between facecam and gameplay (overlap-fixed layout, no visible bar anymore)
+BAR_CENTER_Y = 660  # seam between facecam and gameplay (overlap-fixed layout, no visible bar anymore) - the "default" text position
+TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position - low enough to clear a full-facecam subject's face, high enough to leave room for a 2-line block + platform UI safe zone above H=1920
 LINE_SPACING_FRAC = 0.20  # gap between top and bottom line = 20% of top line's text height
 SECONDARY_GAP_FRAC = 0.35  # gap between primary block's bottom and secondary block's top
 POP_DURATION = 0.14  # seconds
@@ -503,7 +504,8 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
     nh = max(1, int(block.height * scale))
     resized = block.resize((nw, nh), Image.LANCZOS)
     if primary:
-        canvas_y = int(BAR_CENTER_Y - top_center_y * scale)
+        anchor_y = card.get("_anchor_y", BAR_CENTER_Y)
+        canvas_y = int(anchor_y - top_center_y * scale)
     else:
         canvas_y = int(base_y + SECONDARY_GAP_FRAC * FONT_SIZE_SECONDARY * scale)
     paste_x, paste_y = cx - nw // 2, canvas_y
@@ -584,11 +586,35 @@ def apply_fx_passes(cards, lane_no):
             for gi, gcard in enumerate(group):
                 gcard["_fx"][k] = start_val + (end_val - start_val) * (gi / (n - 1))
 
+    # Persisting text-position toggle: carries the last-seen anchor forward
+    # onto every following card, same as an editor expecting "put everything
+    # from here down lower" to stick until told otherwise. Lane 0 only - the
+    # big primary caption is the one that ever sits over a full-facecam
+    # subject's face; a secondary lane always stacks beneath whatever primary
+    # is showing (or BAR_CENTER_Y as a fallback), so it follows automatically.
+    if lane_no == 0:
+        current_anchor = BAR_CENTER_Y
+        for card in cards:
+            pos = parse_text_position(card.get("note"))
+            if pos == "bottom":
+                current_anchor = TEXT_ANCHOR_BOTTOM
+            elif pos == "default":
+                current_anchor = BAR_CENTER_Y
+            card["_anchor_y"] = current_anchor
+
     for card in cards:
         if card["_fx"].get("color"):
             card["fill"] = list(card["_fx"]["color"])
         if card.get("note"):
-            print(f'  note (lane {lane_no + 1}) @ {card["start"]:.2f}s: {describe(card["note"], card["_fx"])}')
+            pos = parse_text_position(card["note"])
+            fx = card["_fx"]
+            if not fx and pos:
+                msg = f'text position -> {pos} <- "{card["note"]}"'
+            else:
+                msg = describe(card["note"], fx)
+                if pos:
+                    msg += f'; text position -> {pos}'
+            print(f'  note (lane {lane_no + 1}) @ {card["start"]:.2f}s: {msg}')
 
 
 def gather_image_overlays(lanes, cards_path, duration_s):
