@@ -343,9 +343,14 @@ explicitly asks for the diarized treatment and is told the time cost upfront.
   as "Unnamed 1", "Unnamed 2", etc. in press order; if the user names a
   marker live, that name lands in `title` instead. **How to apply:** for
   any new VOD, run the ffprobe chapter check first, before falling back to
-  transcript scanning — treat every non-"Start" chapter's timestamp as a
-  candidate-moment center, then read the surrounding transcript window to
-  understand and clip the actual bit.
+  transcript scanning. **A marker's timestamp is *after* the funny moment,
+  not its center** — the user hits the hotkey as a reaction once they
+  realize something clip-worthy just happened, not in anticipation of it, so
+  by the time the marker lands the moment itself is already in the past.
+  Confirmed 2026-09-24: read the transcript window from roughly **60 seconds
+  before** the marker's timestamp (not centered on it, and not looking
+  after), find where the actual bit starts within that window, and clip
+  from there.
   **Marker naming = category.** The user's markers are for **funny moment
   edits** (short-form candidates) — treat a marker's `title` as its category
   label when present. For now that means every non-"Start" chapter is a

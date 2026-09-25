@@ -37,7 +37,9 @@ that's the authoritative reference this repo is built to be driven by.
   HyperFrames motion-graphics authoring skills.
 - `vendor/` — cloned third-party dependencies (DaVinci Resolve MCP server,
   HyperFrames engine) — not edited here, not tracked in git.
-- `assets/fonts/` — caption typefaces (Bebas Neue).
+- `assets/fonts/` — caption typefaces: Bebas Neue (house style) plus four
+  wide/heavy faces picked for small-size mobile legibility (Montserrat Black,
+  Anton, Archivo Black, Poppins ExtraBold).
 - `projects/<job>/{raw,transcript,graphics,outputs}/` — per-job working
   directories (raw footage and rendered outputs are git-ignored; only the
   pipeline code is tracked).
@@ -55,6 +57,11 @@ a persisting text-position toggle (e.g. "near the bottom" / "under my face"
 for a full-facecam segment, "centered again" to return to normal). A note
 the renderer doesn't understand is never silently dropped — it's reported so
 a human can handle it.
+
+The caption font is picked per job from the editor's Font dropdown (Bebas
+Neue or one of the four legibility-focused alternatives above), saved into
+the job's speakers sidecar file, and auto-discovered by `render_captions.py`
+at render time — no render-command changes needed.
 
 ## Environment
 

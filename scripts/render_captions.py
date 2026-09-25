@@ -34,12 +34,49 @@ from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note
 
 W, H = 1080, 1920
 FPS = 30
-FONT_PATH = r"C:\Users\Bem\Desktop\video-editor\assets\fonts\BebasNeue-Regular.ttf"
+FONTS_DIR = r"C:\Users\Bem\Desktop\video-editor\assets\fonts"
+# Caption font options - picked in the caption editor (saved to the job's
+# "*_speakers.json" sidecar as {"font": "<name>"}), auto-discovered here by
+# find_font_path(). "Bebas Neue" is the default when no sidecar/font is set.
+# Bebas Neue is the condensed house style; the others are wide/heavy faces
+# chosen for raw legibility at small mobile caption sizes.
+FONTS = {
+    "Bebas Neue": "BebasNeue-Regular.ttf",
+    "Montserrat Black": "Montserrat-Black.ttf",
+    "Anton": "Anton-Regular.ttf",
+    "Archivo Black": "ArchivoBlack-Regular.ttf",
+    "Poppins ExtraBold": "Poppins-ExtraBold.ttf",
+}
+DEFAULT_FONT = "Bebas Neue"
 EMOJI_FONT_PATH = r"C:\Windows\Fonts\seguiemj.ttf"
 FONT_SIZE = 150
 FONT_SIZE_SECONDARY = 75  # 50% size, matching render_handle.py's established scale-down
 BAR_CENTER_Y = 660  # seam between facecam and gameplay (overlap-fixed layout, no visible bar anymore) - the "default" text position
 TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position - low enough to clear a full-facecam subject's face, high enough to leave room for a 2-line block + platform UI safe zone above H=1920
+
+
+def find_font_choice(cards_path):
+    """The font name saved in this job's "*_speakers.json" sidecar (the
+    caption editor writes {"font": "<name>", "speakers": [...]} there once a
+    font is picked - see caption-editor's Font dropdown). Falls back to
+    DEFAULT_FONT if there's no sidecar, it's the old plain-array speakers
+    format, or it doesn't name a font. cards_path is exactly sys.argv[1]."""
+    base = os.path.basename(cards_path)
+    for suffix in ("_cards.json",):
+        if base.endswith(suffix):
+            sidecar = os.path.join(os.path.dirname(cards_path), base[: -len(suffix)] + "_speakers.json")
+            break
+    else:
+        return DEFAULT_FONT
+    if not os.path.exists(sidecar):
+        return DEFAULT_FONT
+    try:
+        data = json.load(open(sidecar, encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return DEFAULT_FONT
+    if isinstance(data, dict) and data.get("font") in FONTS:
+        return data["font"]
+    return DEFAULT_FONT
 LINE_SPACING_FRAC = 0.20  # gap between top and bottom line = 20% of top line's text height
 SECONDARY_GAP_FRAC = 0.35  # gap between primary block's bottom and secondary block's top
 POP_DURATION = 0.14  # seconds
@@ -59,13 +96,18 @@ WORD_GAP_SECONDARY = 12
 # emoji font instead, rendered as a separate run and stitched in.
 EMOJI_RE = re.compile(r"[\U0001F000-\U0001FFFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
 
-font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
+font = ImageFont.truetype(os.path.join(FONTS_DIR, FONTS[DEFAULT_FONT]), FONT_SIZE)
 emoji_font = ImageFont.truetype(EMOJI_FONT_PATH, FONT_SIZE)
-font_secondary = ImageFont.truetype(FONT_PATH, FONT_SIZE_SECONDARY)
+font_secondary = ImageFont.truetype(os.path.join(FONTS_DIR, FONTS[DEFAULT_FONT]), FONT_SIZE_SECONDARY)
 emoji_font_secondary = ImageFont.truetype(EMOJI_FONT_PATH, FONT_SIZE_SECONDARY)
 
 # A "style" bundles everything that scales together between the primary and
 # secondary caption rows, so the render_* functions don't need two copies.
+# main() may swap "font" in place once it knows which font this job picked
+# (see apply_font_choice) - every function below takes `style` as a dict and
+# reads style["font"] at call time, so mutating these two dicts in place,
+# rather than rebinding them, is what makes that swap actually take effect
+# everywhere (including in default-parameter bindings captured at import).
 PRIMARY_STYLE = {
     "font": font, "emoji_font": emoji_font,
     "stroke_width": STROKE_WIDTH, "extrude_depth": EXTRUDE_DEPTH,
@@ -76,6 +118,18 @@ SECONDARY_STYLE = {
     "stroke_width": STROKE_WIDTH_SECONDARY, "extrude_depth": EXTRUDE_DEPTH_SECONDARY,
     "word_gap": WORD_GAP_SECONDARY, "base_fill": YELLOW,
 }
+
+
+def apply_font_choice(font_name):
+    """Reload PRIMARY_STYLE/SECONDARY_STYLE's fonts in place for font_name (a
+    key in FONTS). Called once from main() with find_font_choice()'s result;
+    a no-op if font_name is already DEFAULT_FONT since the module-level
+    globals above already loaded it."""
+    if font_name not in FONTS or font_name == DEFAULT_FONT:
+        return
+    path = os.path.join(FONTS_DIR, FONTS[font_name])
+    PRIMARY_STYLE["font"] = ImageFont.truetype(path, FONT_SIZE)
+    SECONDARY_STYLE["font"] = ImageFont.truetype(path, FONT_SIZE_SECONDARY)
 
 
 def split_runs(text):
@@ -351,8 +405,11 @@ def sanitize_cards(cards):
     caption editor already keeps them out of "lines", but files saved by an
     older editor (or hand-edited) can still carry them inline — pull them out
     into card["note"] here so they can never be drawn. Also honors "|" as a
-    line break. Cards left with no text are dropped (an empty card breaks the
-    renderer)."""
+    line break. A card with no text AND no note is pointless and is dropped.
+    A card with no text but a note is kept, text-less (a "silent" note-only
+    card - draw_card skips it, so it shows nothing on its own, but its note
+    still drives an image overlay, an fx, or a persisting text-position
+    change exactly like a normal card's would; see main()'s render loop)."""
     kept = []
     for card in cards:
         notes = [card["note"]] if card.get("note") else []
@@ -363,7 +420,7 @@ def sanitize_cards(cards):
                 part = re.sub(r"\s+", " ", part).strip()
                 if part:
                     lines.append(part)
-        if not lines:
+        if not lines and not notes:
             continue
         card["lines"] = lines
         if notes:
@@ -677,6 +734,9 @@ def draw_image_overlay(frame, ov, t):
 
 def main():
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+    font_choice = find_font_choice(cards_path)
+    apply_font_choice(font_choice)
+    print(f"  font: {font_choice}")
     lanes = split_lanes(json.load(open(cards_path, encoding="utf-8")))
     for li, cards in enumerate(lanes):
         apply_fx_passes(cards, li)
@@ -702,8 +762,8 @@ def main():
         bottom = None  # bottom edge of the last lane drawn; sub-lanes stack under it
         for li, cards in enumerate(lanes):
             card = current_card(cards, ci_state, li, t) if cards else None
-            if card is None:
-                continue
+            if card is None or not card["lines"]:
+                continue  # a silent note-only card (see sanitize_cards) draws nothing
             if li == 0:
                 bottom = draw_card(frame, card, PRIMARY_STYLE, t, cache, primary=True)
             else:
