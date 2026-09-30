@@ -51,11 +51,11 @@ DEFAULT_FONT = "Bebas Neue"
 EMOJI_FONT_PATH = r"C:\Windows\Fonts\seguiemj.ttf"
 FONT_SIZE = 150
 FONT_SIZE_SECONDARY = 75  # 50% size, matching render_handle.py's established scale-down
-BAR_CENTER_Y = 480  # 2026-09-30: raised from 660 by exactly the font's metric height (180px
-# at FONT_SIZE=150 Bebas Neue: font.getmetrics() -> ascent 135 + descent 45) to clear the
-# facecam box under the new Resolve-build + ffmpeg-center-crop short layout, which sits
-# higher in frame than the old full-bleed ffmpeg layout this constant was originally tuned
-# for - the facecam overlapped caption text at the old position (user screenshot, "CAN").
+BAR_CENTER_Y = 670  # 2026-09-30: raised for the new Resolve-build + ffmpeg-center-crop short
+# layout's large full-width facecam.exe window (bottom edge ~y=575, vs the old small PiP box
+# this constant was originally tuned for) - verified empirically by rendering a single-word
+# test card, measuring its rendered bbox, and compositing it onto an actual frame before
+# committing (user-approved via screenshot).
 TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position - low enough to clear a full-facecam subject's face, high enough to leave room for a 2-line block + platform UI safe zone above H=1920
 
 
@@ -702,7 +702,12 @@ def gather_image_overlays(lanes, cards_path, duration_s):
                 continue
             frames, durations, total_ms = entry
             start = card["start"]
-            end = duration_s if fx["image_duration"] == "end" else min(duration_s, start + fx["image_duration"])
+            if fx["image_duration"] == "end":
+                end = duration_s
+            elif fx["image_duration"] == "card":
+                end = min(duration_s, card["end"])
+            else:
+                end = min(duration_s, start + fx["image_duration"])
             overlays.append({
                 "start": start, "end": end, "frames": frames, "durations": durations,
                 "total_ms": total_ms, "position": fx["image_position"],

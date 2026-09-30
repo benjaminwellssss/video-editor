@@ -251,7 +251,11 @@ def fx_from_note(note):
     if m:
         fx["image_url"] = m.group(0).rstrip(").,”’")
         low = note.lower()
-        fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else 3.0
+        # default: the image stays on screen for exactly as long as the caption
+        # card it's attached to (not a fixed guess) - images lingering well past
+        # their card was a recurring problem. "until end"/"rest of the video"
+        # still overrides to the end of the clip.
+        fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else "card"
         grid = parse_image_position(note)
         if grid:
             fx["image_position"] = grid  # absolute (vertical, horizontal) anchor on the full frame
@@ -278,7 +282,12 @@ def describe(note, fx):
     if "color" in fx:
         parts.append(f'color -> rgba{tuple(fx["color"])}')
     if "image_url" in fx:
-        dur = "until end of video" if fx["image_duration"] == "end" else f'{fx["image_duration"]:.0f}s'
+        if fx["image_duration"] == "end":
+            dur = "until end of video"
+        elif fx["image_duration"] == "card":
+            dur = "card duration"
+        else:
+            dur = f'{fx["image_duration"]:.0f}s'
         pos = fx["image_position"]
         pos_str = " ".join(pos) if isinstance(pos, tuple) else pos
         parts.append(f'image overlay ({pos_str}, {dur}): {fx["image_url"]}')
