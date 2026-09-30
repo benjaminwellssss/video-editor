@@ -51,7 +51,11 @@ DEFAULT_FONT = "Bebas Neue"
 EMOJI_FONT_PATH = r"C:\Windows\Fonts\seguiemj.ttf"
 FONT_SIZE = 150
 FONT_SIZE_SECONDARY = 75  # 50% size, matching render_handle.py's established scale-down
-BAR_CENTER_Y = 660  # seam between facecam and gameplay (overlap-fixed layout, no visible bar anymore) - the "default" text position
+BAR_CENTER_Y = 480  # 2026-09-30: raised from 660 by exactly the font's metric height (180px
+# at FONT_SIZE=150 Bebas Neue: font.getmetrics() -> ascent 135 + descent 45) to clear the
+# facecam box under the new Resolve-build + ffmpeg-center-crop short layout, which sits
+# higher in frame than the old full-bleed ffmpeg layout this constant was originally tuned
+# for - the facecam overlapped caption text at the old position (user screenshot, "CAN").
 TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position - low enough to clear a full-facecam subject's face, high enough to leave room for a 2-line block + platform UI safe zone above H=1920
 
 
