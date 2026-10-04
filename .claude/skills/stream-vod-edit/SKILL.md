@@ -1245,6 +1245,37 @@ each:
    [[project-valheim-episode-numbering]]-style memory for this series) to
    the TITLE if one is in effect for the job.
 
+### Short metadata: YouTube + TikTok + Instagram (user's spec, 2026-10-03)
+
+Every short's `metadata.txt` has three sections, with the same wording reused across them. Don't reword
+between platforms for variety's sake:
+
+- `===== YOUTUBE SHORTS =====`: `TITLE:` (ends in `#Shorts`), `DESCRIPTION:` (the standard description
+  below, then a hashtag line), and `TAGS (comma-separated, N/450 chars):` with the real count.
+- `===== TIKTOK =====` and `===== INSTAGRAM REELS =====`: one paste-ready `CAPTION:` block each,
+  made of the same title without `#Shorts`, the standard description, and the same hashtags without
+  `#Shorts`. These platforms have no title or tags field.
+
+**Standard description.** The user wrote this. It is not a recap of the clip. Use it verbatim, and
+change only "a sub" to "a follow" on TikTok and Instagram:
+
+```
+Hey, thank you so much for watching! I'm a Christian streamer who gets a little rowdy and doesn't take life too seriously. My goals are simple: tell you the truth, and make you laugh.
+
+But seriously, every view, like and comment means the world to me. If you even thought about smiling, drop a like and a sub 🙏
+
+If this one made you laugh, come hang out live! The streams are like this all the time: good friends, dumb voices, and way too many bits. I'd love to see you in chat.
+
+I'm @beanjahmean, same handle on every platform:
+Twitch: https://www.twitch.tv/beanjahmean
+YouTube: https://www.youtube.com/@beanjahmean
+TikTok: https://www.tiktok.com/@beanjahmean
+Instagram: https://www.instagram.com/beanjahmean
+X: https://x.com/beanjahmean
+```
+
+The reference file is `CLIPS/10-02-2026_Northgard/n_tony_godfather_wedding/mafia-bit-cut/metadata.txt`.
+
 ### Profanity → caption emoji substitution
 
 On-screen caption text (regardless of whether the word is also censored in
