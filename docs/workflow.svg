@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1740" width="1500" height="1740" font-family="Segoe UI, Helvetica, Arial, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7385"/></marker></defs><rect width="1500" height="1740" fill="#ffffff"/><text x="750.0" y="40" text-anchor="middle" font-size="26" font-weight="800" fill="#1d2330">Stream → finished videos: the workflow</text>
+<text x="750.0" y="64" text-anchor="middle" font-size="14" fill="#4a5263">Every job starts at the top; step 3 picks one or more branches.</text>
+<rect x="560.0" y="86" width="380" height="60" rx="10" fill="#2b2f3a" stroke="#2b2f3a" stroke-width="2"/>
+<text x="750.0" y="112.2" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Raw stream recording</text>
+<text x="750.0" y="131.2" text-anchor="middle" font-size="13" font-weight="400" fill="#ffffff">OBS, multi-track audio, optional OBS markers</text>
+<path d="M 750.0,146 L 750.0,172" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="490.0" y="174" width="520" height="79" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="750.0" y="200.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">1 · Intake + audio-track check</text>
+<text x="750.0" y="219.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">copy raw into projects/&lt;job&gt;/raw · sample every track at 2–3 spots</text>
+<text x="750.0" y="238.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">you confirm which track is the voice before anything is built</text>
+<path d="M 750.0,253 L 750.0,279" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="490.0" y="281" width="520" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="750.0" y="307.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">2 · Transcribe the whole VOD once</text>
+<text x="750.0" y="326.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">transcribe.py  ·  transcribe_chunked.py (very long)  ·  transcribe_diarized.py (speakers)</text>
+<text x="750.0" y="345.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">cached at transcript/words.json, reused by every branch</text>
+<path d="M 750.0,360 L 750.0,386" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<polygon points="750.0,388.0 915.0,438 750.0,488.0 585.0,438" fill="#f3e8ff" stroke="#8a4fd6" stroke-width="2"/>
+<text x="750.0" y="434" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">3 · What are we making?</text>
+<text x="750.0" y="452" text-anchor="middle" font-size="13" font-weight="400" fill="#1d2330">pick any combination</text>
+<path d="M 750.0,488.0 L 750.0,518.0 M 165,518.0 L 1135,518.0" fill="none" stroke="#6b7385" stroke-width="2"/>
+<path d="M 165,518.0 L 165,556.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M 445,518.0 L 445,556.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M 725,518.0 L 725,556.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M 1135,518.0 L 1135,556.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="558.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="165" y="584.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">A · Full VOD cleanup</text>
+<text x="165" y="603.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">whole stream, not a reel</text>
+<path d="M 165,618.0 L 165,642.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="644.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="165" y="670.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Trim dead air</text>
+<text x="165" y="689.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">transcript gaps → ~1s breathing room</text>
+<path d="M 165,704.0 L 165,728.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="730.0" width="250" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="165" y="756.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Censor</text>
+<text x="165" y="775.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">cut scenes for slurs / racial</text>
+<text x="165" y="794.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">topics · excise “fuck” frames</text>
+<path d="M 165,809.0 L 165,833.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="835.0" width="250" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="165" y="861.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Build Resolve timeline</text>
+<text x="165" y="880.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">resolve_build_timeline.py</text>
+<text x="165" y="899.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">(trimmable clips, never flattened)</text>
+<path d="M 165,914.0 L 165,938.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="940.0" width="250" height="60" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="165" y="966.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You finish + export</text>
+<text x="165" y="985.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">in Resolve</text>
+<path d="M 165,1000.0 L 165,1024.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="40.0" y="1026.0" width="250" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="165" y="1052.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">VOD/&lt;date_GAME&gt;/</text>
+<rect x="320.0" y="558.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="445" y="584.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">B · Highlight edit</text>
+<text x="445" y="603.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">20–40 min, length = ceiling</text>
+<path d="M 445,618.0 L 445,642.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="320.0" y="644.0" width="250" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="445" y="670.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Pick the moments</text>
+<text x="445" y="689.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">OBS markers first (context from</text>
+<text x="445" y="708.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">~60s before), else transcript scan</text>
+<path d="M 445,723.0 L 445,747.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="320.0" y="749.0" width="250" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="445" y="775.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Build Resolve timeline</text>
+<text x="445" y="794.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">yellow markers = funny,</text>
+<text x="445" y="813.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">cyan = set-pieces</text>
+<path d="M 445,828.0 L 445,852.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="320.0" y="854.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="445" y="880.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">SRT + metadata</text>
+<text x="445" y="899.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">build_srt_from_clip_infos.py</text>
+<path d="M 445,914.0 L 445,938.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="320.0" y="940.0" width="250" height="60" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="445" y="966.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You finish + export</text>
+<text x="445" y="985.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">in Resolve</text>
+<path d="M 445,1000.0 L 445,1024.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="320.0" y="1026.0" width="250" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="445" y="1052.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">EDITS/&lt;date_GAME&gt;/</text>
+<rect x="600.0" y="558.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="725" y="584.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">C · VOD-style long-form</text>
+<text x="725" y="603.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">chronological, ~50 min</text>
+<path d="M 725,618.0 L 725,642.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="600.0" y="644.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="725" y="670.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Write a plan</text>
+<text x="725" y="689.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">kept ranges of one recording</text>
+<path d="M 725,704.0 L 725,728.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="600.0" y="730.0" width="250" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="725" y="756.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">build_vod_cut.py</text>
+<text x="725" y="775.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">tightens words, excises “fuck”</text>
+<path d="M 725,790.0 L 725,814.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="600.0" y="816.0" width="250" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="725" y="842.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">One segment list → all of:</text>
+<text x="725" y="861.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">SRT · metadata + chapters ·</text>
+<text x="725" y="880.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">flagged words · clip_infos · MP4</text>
+<path d="M 725,895.0 L 725,919.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="600.0" y="921.0" width="250" height="60" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="725" y="947.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You review</text>
+<text x="725" y="966.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">(optionally rebuild in Resolve)</text>
+<path d="M 725,981.0 L 725,1005.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="600.0" y="1007.0" width="250" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="725" y="1033.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">EDITS/&lt;date_GAME&gt;/</text>
+<rect x="925.0" y="558.0" width="420" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="584.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">D · Shorts batch</text>
+<text x="1135" y="603.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">30–90s each, funniest self-contained moments</text>
+<path d="M 1135,618.0 L 1135,642.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="644.0" width="420" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="670.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Pick moments</text>
+<text x="1135" y="689.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">OBS markers first · flagged words stay in (reported, not cut)</text>
+<path d="M 1135,704.0 L 1135,728.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="730.0" width="420" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="756.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Build clip folders · prep_shorts_batch.py</text>
+<text x="1135" y="775.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">&lt;clip&gt;.mp4 + captions.json/.srt (VOD transcript) + metadata</text>
+<text x="1135" y="794.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">layout: split · full-bleed + facecam.exe · blur-stack</text>
+<path d="M 1135,809.0 L 1135,833.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="835.0" width="420" height="79" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="1135" y="861.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Optional: re-cut by hand in Resolve</text>
+<text x="1135" y="880.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">build_group_timelines.py → you trim + export</text>
+<text x="1135" y="899.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">a re-cut goes in a named variant subfolder</text>
+<path d="M 1135,914.0 L 1135,936.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<polygon points="1135,936.0 1315.0,991.0 1135,1046.0 955.0,991.0" fill="#f3e8ff" stroke="#8a4fd6" stroke-width="2"/>
+<text x="1135" y="987.0" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Transcribe the short pre-render?</text>
+<text x="1135" y="1005.0" text-anchor="middle" font-size="13" font-weight="400" fill="#1d2330">(the rendered clip itself)</text>
+<path d="M 1030,1013.9166666666666 L 1030,1094.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<text x="1006" y="1039.9166666666665" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">YES</text>
+<path d="M 1240,1013.9166666666666 L 1240,1094.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<text x="1262" y="1039.9166666666665" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">NO</text>
+<rect x="932.5" y="1096.0" width="195" height="136" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1030" y="1122.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Re-transcribe the short</text>
+<text x="1030" y="1141.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">WhisperX + forced alignment</text>
+<text x="1030" y="1160.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">1 word / card, accurate times</text>
+<text x="1030" y="1179.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">verify_caption_timing.py</text>
+<text x="1030" y="1198.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">use when: re-cut, garbled,</text>
+<text x="1030" y="1217.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">or captions must be exact</text>
+<rect x="1142.5" y="1096.0" width="195" height="136.0" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1240" y="1122.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Skip it</text>
+<text x="1240" y="1141.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">keep the captions built</text>
+<text x="1240" y="1160.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">from the VOD transcript</text>
+<text x="1240" y="1179.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">(fine when the cut is</text>
+<text x="1240" y="1198.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">unchanged, words clean)</text>
+<path d="M 1030,1232.0 L 1030,1272.0 L 1135,1272.0 L 1135,1294.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M 1240,1232.0 L 1240,1272.0 L 1135,1272.0" fill="none" stroke="#6b7385" stroke-width="2"/>
+<rect x="925.0" y="1296.0" width="420" height="79" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="1135" y="1322.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You edit captions in caption-editor</text>
+<text x="1135" y="1341.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">text · speakers (colors) · notes (fx words) · image/GIF links</text>
+<text x="1135" y="1360.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">your edits are final — rendered exactly as written</text>
+<path d="M 1135,1375.0 L 1135,1399.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="1401.0" width="420" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="1427.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Render + composite  (only when you say go)</text>
+<text x="1135" y="1446.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">render_captions.py → ProRes 4444 overlay + note images</text>
+<text x="1135" y="1465.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">ffmpeg lays it over the clip → &lt;clip&gt;_captioned.mp4</text>
+<path d="M 1135,1480.0 L 1135,1504.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="1506.0" width="420" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="1532.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">metadata.txt</text>
+<text x="1135" y="1551.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">YouTube Shorts · TikTok · Instagram Reels — same wording</text>
+<path d="M 1337.5,1164.0 L 1385.0,1164.0 L 1385.0,1536.0 L 1347.0,1536.0" fill="none" stroke="#6b7385" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+<text transform="translate(1401.0,1350.0) rotate(90)" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">posting uncaptioned? skip straight to metadata</text>
+<path d="M 1135,1566.0 L 1135,1590.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="1592.0" width="420" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="1135" y="1618.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">CLIPS/&lt;date_GAME&gt;/&lt;clip&gt;/</text>
+<rect x="70" y="1670" width="34" height="26" rx="5" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="114" y="1688" font-size="14" fill="#1d2330">automated (Claude + scripts)</text>
+<rect x="342.79999999999995" y="1670" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="386.79999999999995" y="1688" font-size="14" fill="#1d2330">your hands-on step</text>
+<rect x="539.5999999999999" y="1670" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="583.5999999999999" y="1688" font-size="14" fill="#1d2330">optional</text>
+<rect x="660.3999999999999" y="1670" width="34" height="26" rx="5" fill="#f3e8ff" stroke="#8a4fd6" stroke-width="2"/>
+<text x="704.3999999999999" y="1688" font-size="14" fill="#1d2330">decision</text>
+<rect x="781.1999999999998" y="1670" width="34" height="26" rx="13" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="825.1999999999998" y="1688" font-size="14" fill="#1d2330">deliverable folder (E:\Streaming\Videos)</text></svg>
