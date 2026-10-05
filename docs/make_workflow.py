@@ -176,7 +176,7 @@ yend = box(X, yy, DW, ["CLIPS/<date_GAME>/<clip>/"], "out")
 # ---- legend ------------------------------------------------------------------
 ly0 = H - 70
 items = [("auto", "automated (Claude + scripts)", False), ("manual", "your hands-on step", False),
-         ("manual", "optional", True), ("choice", "decision", False), ("out", "deliverable folder (E:\\Streaming\\Videos)", False)]
+         ("manual", "optional", True), ("choice", "decision", False), ("out", "deliverable folder", False)]
 x0 = 70
 for kind, label, dashed in items:
     fill, stroke = C[kind]
@@ -191,5 +191,5 @@ svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W
        '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">'
        '<path d="M0,0 L10,5 L0,10 z" fill="#6b7385"/></marker></defs>'
        f'<rect width="{W}" height="{H}" fill="#ffffff"/>' + "\n".join(out) + "</svg>")
-open(r"C:\Users\Bem\Desktop\video-editor\docs\workflow.svg", "w", encoding="utf-8").write(svg)
+open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "workflow.svg"), "w", encoding="utf-8").write(svg)
 print("ok, shorts column ends at", yend)

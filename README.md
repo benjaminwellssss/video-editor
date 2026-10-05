@@ -208,7 +208,7 @@ automatically.
 
 ## Deliverable folders
 
-Everything finished lands under `E:\Streaming\Videos\`:
+Everything finished lands in the deliverables folder, which has four subfolders:
 
 | Folder | Holds |
 |---|---|
