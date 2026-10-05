@@ -8,6 +8,13 @@ TikTok and Instagram.
 Long-form cuts are never flattened inside Resolve. The cut is rebuilt as a
 real, trimmable timeline, so it stays editable until you export it yourself.
 
+**Companion repo:** [caption-editor](https://github.com/benjaminwellssss/caption-editor)
+([Gitea mirror](https://git.onebynine.ai/ben/caption-editor)) is the local
+browser app where you hand-edit a short's `captions.json` between this
+pipeline building it and this pipeline rendering it. That covers text,
+speakers, timing, overlapping-speech lanes, production notes and font. Its
+README has its own step-by-step chart and how-tos.
+
 ![Workflow flowchart](docs/workflow.svg)
 
 <sub>Also as a PNG: [`docs/workflow.png`](docs/workflow.png).</sub>
@@ -99,7 +106,8 @@ moment.
    never as a `_v2` file next to the original.
 4. **Decide: transcribe the short pre-render, or not?** See the next
    section.
-5. **Edit the captions** in the caption editor (separate repo, `caption-editor`).
+5. **Edit the captions** in the
+   [caption editor](https://github.com/benjaminwellssss/caption-editor#how-tos).
    You can fix text, set speakers (each gets a fill color), write plain-English
    notes that drive effects, and paste image/GIF links. **Your edits are
    final:** they're rendered exactly as written.
@@ -171,7 +179,9 @@ cheaper middle ground when the base transcript was already good.
 ## Captions
 
 `render_captions.py` renders animated, word-level pop-in captions as a
-transparent overlay from a `captions.json` card list.
+transparent overlay from a `captions.json` card list, usually one you have
+just edited in [caption-editor](https://github.com/benjaminwellssss/caption-editor).
+Its README has a writer's cheat sheet for the note words below.
 
 Card fields:
 - `start`, `end`, `lines`
