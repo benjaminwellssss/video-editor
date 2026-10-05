@@ -6,3 +6,4 @@ vendor/*/
 *.m4a
 __pycache__/
 *.pyc
+CLAUDE.md
