@@ -137,7 +137,7 @@ def parse_text_position(note):
     reads one note."""
     if not note:
         return None
-    low = note.lower()
+    low = _text(note).lower()
     for phrase, val in TEXT_POSITION_PHRASES:
         if phrase in low:
             return val
@@ -151,7 +151,7 @@ def parse_image_position(note):
     """An absolute (vertical, horizontal) grid anchor named in the note -
     "top left", "middle right", "bottom center", "dead center", or a bare
     "top"/"bottom"/"left"/"right"/"center" - or None if it doesn't name one."""
-    low = note.lower()
+    low = _text(note).lower()
     for phrase, pos in POSITION_PHRASES:
         if phrase in low:
             return pos
@@ -170,8 +170,14 @@ QUOTED_RE = re.compile(r'[\'"‘“]([^\'"’”]+)[\'"’”]')
 END_OF_VIDEO_RE = re.compile(r"(?:until|till|til|to)\s+(?:the\s+)?end\b|rest\s+of\s+the\s+video", re.I)
 
 
+def _text(note):
+    """The note with any link removed - words inside a URL ("covers" -> "over",
+    ".../red/...") must never read as instructions."""
+    return URL_RE.sub(" ", note)
+
+
 def _words(note):
-    return set(re.findall(r"[a-z]+(?:-[a-z]+)?", note.lower()))
+    return set(re.findall(r"[a-z]+(?:-[a-z]+)?", _text(note).lower()))
 
 
 def note_factor(note):
@@ -250,7 +256,7 @@ def fx_from_note(note):
     m = URL_RE.search(note)
     if m:
         fx["image_url"] = m.group(0).rstrip(").,”’")
-        low = note.lower()
+        low = _text(note).lower()
         # default: the image stays on screen for exactly as long as the caption
         # card it's attached to (not a fixed guess) - images lingering well past
         # their card was a recurring problem. "until end"/"rest of the video"
@@ -259,7 +265,7 @@ def fx_from_note(note):
         grid = parse_image_position(note)
         if grid:
             fx["image_position"] = grid  # absolute (vertical, horizontal) anchor on the full frame
-        elif any(w in low for w in ("above", "over")):
+        elif _words(note) & {"above", "over"}:
             fx["image_position"] = "above"  # relative to the caption, legacy default
         else:
             fx["image_position"] = "below"  # default, also covers under/below/beneath
