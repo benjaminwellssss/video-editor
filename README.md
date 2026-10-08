@@ -106,12 +106,20 @@ moment.
    never as a `_v2` file next to the original.
 4. **Decide: transcribe the short pre-render, or not?** See the next
    section.
-5. **Edit the captions** in the
+5. **Add the teaser.** Every short opens with 2–5 seconds of its funniest
+   beat (the punchline or the big laugh), then plays from its normal start,
+   so viewers get hooked.
+   - `add_teaser.py <clip> --suggest` lists the loudest word-aligned
+     windows as candidates.
+   - `add_teaser.py <clip> <start> <end>` puts that window in front, snapped
+     to word edges. It copies that window's captions to the front and shifts
+     the rest. The pre-teaser files move to `no-teaser/`.
+6. **Edit the captions** in the
    [caption editor](https://github.com/benjaminwellssss/caption-editor#how-tos).
    You can fix text, set speakers (each gets a fill color), write plain-English
    notes that drive effects, and paste image/GIF links. **Your edits are
    final:** they're rendered exactly as written.
-6. **Render + composite**, only when you say so. `render_captions.py` renders
+7. **Render + composite**, only when you say so. `render_captions.py` renders
    a transparent ProRes 4444 overlay:
    - Note words (zoom, vibrate, red, progressively…) become effects through
      `caption_fx.py`.
@@ -120,7 +128,7 @@ moment.
 
    ffmpeg then lays the overlay over the clip, giving
    `<clip>_captioned.mp4`.
-7. **Metadata.** `metadata.txt` has YouTube Shorts, TikTok and Instagram
+8. **Metadata.** `metadata.txt` has YouTube Shorts, TikTok and Instagram
    Reels sections. They use the same title, description and hashtags, not
    reworded per platform. The standard description (thanks for watching, an
    invite to the streams, handle links) is in the `stream-vod-edit` skill.
@@ -154,7 +162,7 @@ cheaper middle ground when the base transcript was already good.
   | Transcription | `transcribe.py`, `transcribe_chunked.py`, `transcribe_diarized.py` |
   | Long-form cuts | `build_vod_cut.py`, `build_scene_cut.py`, `resolve_build_timeline.py` |
   | SRT builders | `build_srt_from_cut.py`, `build_srt_from_clip_infos.py`, `build_srt_multi_source.py`, `build_srt_from_cards.py` |
-  | Shorts | `prep_shorts_batch.py`, `verify_shorts_batch.py`, `build_jumpcut_short.py`, `build_custom_crop_short.py`, `build_fullbleed_short.py`, `build_blurstack_batch.py`, `build_group_timelines.py`, `remap_words_jumpcut.py` |
+  | Shorts | `prep_shorts_batch.py`, `verify_shorts_batch.py`, `build_jumpcut_short.py`, `build_custom_crop_short.py`, `build_fullbleed_short.py`, `build_blurstack_batch.py`, `build_group_timelines.py`, `remap_words_jumpcut.py`, `add_teaser.py` |
   | Caption cards | `build_caption_cards.py`, `build_short_cards_from_segments.py`, `build_sentence_emphasis_cards.py`, `build_speaker_cards.py`, `build_speaker_colors.py`, `build_cards_from_ranges.py` |
   | Rendering | `render_captions.py`, `caption_fx.py`, `render_handle.py`, `render_facecam_frame.py`, `render_static_caption.py`, `render_disclaimer_card.py`, `build_shake_zoom_punch.py` |
   | Checks | `verify_caption_timing.py`, `verify_shorts_batch.py` |

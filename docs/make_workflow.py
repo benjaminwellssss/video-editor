@@ -1,11 +1,11 @@
 """Generate docs/workflow.svg (flowchart of the pipeline with its options).
 
-PNG: chrome --headless=new --window-size=1500,1740 --screenshot=docs/workflow.png docs/workflow.svg
+PNG: chrome --headless=new --window-size=1500,1830 --screenshot=docs/workflow.png docs/workflow.svg
 """
 import os
 from html import escape
 
-W, H = 1500, 1740
+W, H = 1500, 1830
 FONT = "Segoe UI, Helvetica, Arial, sans-serif"
 C = {
     "auto": ("#e8f1ff", "#3b6fd8"),     # automated step (Claude + scripts)
@@ -155,7 +155,13 @@ skip_mid = (by + ry) / 2
 my = ly + 40
 arrow([(LX, ly), (LX, my), (X, my), (X, my + 22)])
 out.append(f'<path d="M {RX},{ry} L {RX},{my} L {X},{my}" fill="none" stroke="#6b7385" stroke-width="2"/>')
-yy = box(X, my + 24, DW, ["You edit captions in caption-editor",
+teaser_top = my + 24
+yy = box(X, teaser_top, DW, ["Add the teaser · add_teaser.py",
+                             "2–5s of the short's funniest beat, played first",
+                             "captions copied + shifted · originals → no-teaser/"])
+teaser_mid = (teaser_top + yy) / 2
+arrow([(X, yy), (X, yy + 24)]); yy += 26
+yy = box(X, yy, DW, ["You edit captions in caption-editor",
                           "text · speakers (colors) · notes (fx words) · image/GIF links",
                           "your edits are final — rendered exactly as written"], "manual")
 arrow([(X, yy), (X, yy + 24)]); yy += 26
@@ -165,11 +171,11 @@ yy = box(X, yy, DW, ["Render + composite  (only when you say go)",
 arrow([(X, yy), (X, yy + 24)]); yy += 26
 meta_top = yy
 yy = box(X, yy, DW, ["metadata.txt", "YouTube Shorts · TikTok · Instagram Reels — same wording"])
-# posting with no captions at all: straight from "Skip it" to metadata
+# posting with no captions at all: after the teaser, straight to metadata
 GX = X + DW / 2 + 40
 meta_mid = (meta_top + yy) / 2
-arrow([(RX + BW / 2, skip_mid), (GX, skip_mid), (GX, meta_mid), (X + DW / 2 + 2, meta_mid)], dashed=True)
-out.append(f'<text transform="translate({GX + 16},{(skip_mid + meta_mid) / 2}) rotate(90)" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">posting uncaptioned? skip straight to metadata</text>')
+arrow([(X + DW / 2, teaser_mid), (GX, teaser_mid), (GX, meta_mid), (X + DW / 2 + 2, meta_mid)], dashed=True)
+out.append(f'<text transform="translate({GX + 16},{(teaser_mid + meta_mid) / 2}) rotate(90)" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">posting uncaptioned? skip to metadata</text>')
 arrow([(X, yy), (X, yy + 24)]); yy += 26
 yend = box(X, yy, DW, ["CLIPS/<date_GAME>/<clip>/"], "out")
 

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1740" width="1500" height="1740" font-family="Segoe UI, Helvetica, Arial, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7385"/></marker></defs><rect width="1500" height="1740" fill="#ffffff"/><text x="750.0" y="40" text-anchor="middle" font-size="26" font-weight="800" fill="#1d2330">Stream → finished videos: the workflow</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1830" width="1500" height="1830" font-family="Segoe UI, Helvetica, Arial, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7385"/></marker></defs><rect width="1500" height="1830" fill="#ffffff"/><text x="750.0" y="40" text-anchor="middle" font-size="26" font-weight="800" fill="#1d2330">Stream → finished videos: the workflow</text>
 <text x="750.0" y="64" text-anchor="middle" font-size="14" fill="#4a5263">Every job starts at the top; step 3 picks one or more branches.</text>
 <rect x="560.0" y="86" width="380" height="60" rx="10" fill="#2b2f3a" stroke="#2b2f3a" stroke-width="2"/>
 <text x="750.0" y="112.2" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Raw stream recording</text>
@@ -133,31 +133,36 @@
 <text x="1240" y="1198.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">unchanged, words clean)</text>
 <path d="M 1030,1232.0 L 1030,1272.0 L 1135,1272.0 L 1135,1294.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
 <path d="M 1240,1232.0 L 1240,1272.0 L 1135,1272.0" fill="none" stroke="#6b7385" stroke-width="2"/>
-<rect x="925.0" y="1296.0" width="420" height="79" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
-<text x="1135" y="1322.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You edit captions in caption-editor</text>
-<text x="1135" y="1341.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">text · speakers (colors) · notes (fx words) · image/GIF links</text>
-<text x="1135" y="1360.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">your edits are final — rendered exactly as written</text>
+<rect x="925.0" y="1296.0" width="420" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="1322.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Add the teaser · add_teaser.py</text>
+<text x="1135" y="1341.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">2–5s of the short&#x27;s funniest beat, played first</text>
+<text x="1135" y="1360.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">captions copied + shifted · originals → no-teaser/</text>
 <path d="M 1135,1375.0 L 1135,1399.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
-<rect x="925.0" y="1401.0" width="420" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
-<text x="1135" y="1427.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Render + composite  (only when you say go)</text>
-<text x="1135" y="1446.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">render_captions.py → ProRes 4444 overlay + note images</text>
-<text x="1135" y="1465.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">ffmpeg lays it over the clip → &lt;clip&gt;_captioned.mp4</text>
+<rect x="925.0" y="1401.0" width="420" height="79" rx="10" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="1135" y="1427.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">You edit captions in caption-editor</text>
+<text x="1135" y="1446.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">text · speakers (colors) · notes (fx words) · image/GIF links</text>
+<text x="1135" y="1465.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">your edits are final — rendered exactly as written</text>
 <path d="M 1135,1480.0 L 1135,1504.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
-<rect x="925.0" y="1506.0" width="420" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
-<text x="1135" y="1532.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">metadata.txt</text>
-<text x="1135" y="1551.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">YouTube Shorts · TikTok · Instagram Reels — same wording</text>
-<path d="M 1337.5,1164.0 L 1385.0,1164.0 L 1385.0,1536.0 L 1347.0,1536.0" fill="none" stroke="#6b7385" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ah)"/>
-<text transform="translate(1401.0,1350.0) rotate(90)" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">posting uncaptioned? skip straight to metadata</text>
-<path d="M 1135,1566.0 L 1135,1590.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
-<rect x="925.0" y="1592.0" width="420" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
-<text x="1135" y="1618.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">CLIPS/&lt;date_GAME&gt;/&lt;clip&gt;/</text>
-<rect x="70" y="1670" width="34" height="26" rx="5" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
-<text x="114" y="1688" font-size="14" fill="#1d2330">automated (Claude + scripts)</text>
-<rect x="342.79999999999995" y="1670" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
-<text x="386.79999999999995" y="1688" font-size="14" fill="#1d2330">your hands-on step</text>
-<rect x="539.5999999999999" y="1670" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="583.5999999999999" y="1688" font-size="14" fill="#1d2330">optional</text>
-<rect x="660.3999999999999" y="1670" width="34" height="26" rx="5" fill="#f3e8ff" stroke="#8a4fd6" stroke-width="2"/>
-<text x="704.3999999999999" y="1688" font-size="14" fill="#1d2330">decision</text>
-<rect x="781.1999999999998" y="1670" width="34" height="26" rx="13" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
-<text x="825.1999999999998" y="1688" font-size="14" fill="#1d2330">deliverable folder</text></svg>
+<rect x="925.0" y="1506.0" width="420" height="79" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="1532.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">Render + composite  (only when you say go)</text>
+<text x="1135" y="1551.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">render_captions.py → ProRes 4444 overlay + note images</text>
+<text x="1135" y="1570.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">ffmpeg lays it over the clip → &lt;clip&gt;_captioned.mp4</text>
+<path d="M 1135,1585.0 L 1135,1609.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="1611.0" width="420" height="60" rx="10" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="1135" y="1637.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">metadata.txt</text>
+<text x="1135" y="1656.2" text-anchor="middle" font-size="13" font-weight="400" fill="#4a5263">YouTube Shorts · TikTok · Instagram Reels — same wording</text>
+<path d="M 1345.0,1335.5 L 1385.0,1335.5 L 1385.0,1641.0 L 1347.0,1641.0" fill="none" stroke="#6b7385" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+<text transform="translate(1401.0,1488.25) rotate(90)" text-anchor="middle" font-size="13" font-weight="700" fill="#8a4fd6">posting uncaptioned? skip to metadata</text>
+<path d="M 1135,1671.0 L 1135,1695.0" fill="none" stroke="#6b7385" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="925.0" y="1697.0" width="420" height="41" rx="20.5" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="1135" y="1723.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2330">CLIPS/&lt;date_GAME&gt;/&lt;clip&gt;/</text>
+<rect x="70" y="1760" width="34" height="26" rx="5" fill="#e8f1ff" stroke="#3b6fd8" stroke-width="2"/>
+<text x="114" y="1778" font-size="14" fill="#1d2330">automated (Claude + scripts)</text>
+<rect x="342.79999999999995" y="1760" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2"/>
+<text x="386.79999999999995" y="1778" font-size="14" fill="#1d2330">your hands-on step</text>
+<rect x="539.5999999999999" y="1760" width="34" height="26" rx="5" fill="#fff1df" stroke="#e08a1e" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="583.5999999999999" y="1778" font-size="14" fill="#1d2330">optional</text>
+<rect x="660.3999999999999" y="1760" width="34" height="26" rx="5" fill="#f3e8ff" stroke="#8a4fd6" stroke-width="2"/>
+<text x="704.3999999999999" y="1778" font-size="14" fill="#1d2330">decision</text>
+<rect x="781.1999999999998" y="1760" width="34" height="26" rx="13" fill="#e5f7ea" stroke="#2f9e57" stroke-width="2"/>
+<text x="825.1999999999998" y="1778" font-size="14" fill="#1d2330">deliverable folder</text></svg>

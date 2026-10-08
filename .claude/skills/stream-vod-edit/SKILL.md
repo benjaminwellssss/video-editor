@@ -1367,6 +1367,32 @@ here — this section covers everything else.
   the [preview clip] at the front like you did") — once established for a
   given channel/style, keep doing it on subsequent edits without being
   asked again.
+- **Every short opens with a 2-5 second teaser (user, 2026-10-08).** The
+  short version of the cold open: the funniest beat of the short itself
+  (usually the punchline or the big laugh) plays first, then the short runs
+  from its normal start, so viewers are hooked and stay for the whole thing.
+  - **When:** once the cut is final (after any hand re-cut in Resolve is
+    exported) and *before* captions are hand-edited, so the teaser's
+    captions get edited with the rest. It also works on already-edited
+    captions (it only copies and shifts cards), but do it before the caption
+    render/composite either way - a composited `_captioned.mp4` would need
+    re-rendering.
+  - **Picking the moment** is a transcript judgment call, like picking the
+    clip: the payoff line, not the setup, 2-5 s, starting and ending on word
+    edges. `scripts/add_teaser.py <clip_dir> --suggest` lists the loudest
+    word-aligned windows as candidates (laughs/yelling usually mark the
+    payoff); pick from those or from reading the transcript, and say which
+    line was used when reporting back.
+  - **Building it:** `scripts/add_teaser.py <clip_dir> <start> <end>` cuts the
+    window from the short (snapped outward to word edges), joins it in front
+    with a 30 ms audio fade on each join, copies the window's caption cards to
+    the front, shifts every other card by the teaser length, and rewrites
+    `captions.srt`. The pre-teaser mp4/captions move to `<clip_dir>/no-teaser/`
+    (a variant subfolder); it refuses to run twice on one folder.
+  - Hand-built driver scripts that find cards by note text (e.g.
+    `render_vibes_villagers.py`) take the first match - after a teaser, a
+    copied card with the same note comes first, so check those before
+    re-running one.
 - **Real spoken introduction, spliced in after the cold open**: the user is
   starting to record an actual intro ("hey guys, welcome back...") at some
   point in the raw footage — distinct from the cold-open trick above, which
