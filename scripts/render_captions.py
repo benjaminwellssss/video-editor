@@ -708,9 +708,16 @@ def gather_image_overlays(lanes, cards_path, duration_s):
                 end = min(duration_s, card["end"])
             else:
                 end = min(duration_s, start + fx["image_duration"])
+            prev = overlays[-1] if overlays else None
+            if (prev and prev["url"] == url and prev["position"] == fx["image_position"]
+                    and 0 <= start - prev["end"] < 0.05):
+                # the same image on back-to-back cards (a phrase) plays as one overlay,
+                # instead of restarting the GIF on every word
+                prev["end"] = max(prev["end"], end)
+                continue
             overlays.append({
                 "start": start, "end": end, "frames": frames, "durations": durations,
-                "total_ms": total_ms, "position": fx["image_position"],
+                "total_ms": total_ms, "position": fx["image_position"], "url": url,
             })
     return overlays
 
