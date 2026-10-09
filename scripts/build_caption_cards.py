@@ -10,7 +10,7 @@ import re
 import sys
 
 SHORTS_DIR = r"E:\video-editor-projects\valheimin-ep1-longplay-vod\shorts"
-LEAD_S = 0.12  # pull each card's start slightly earlier so it never lags the word
+LEAD_S = 0.0  # cards start on the word itself: a 0.12s head start read as "popping up too early" (user, 2026-10-09)
 
 # on-screen caption text only — does not affect whether the word is censored
 # in audio (see skill's Censoring tiers: "ass"/"shit" keep their audio, only

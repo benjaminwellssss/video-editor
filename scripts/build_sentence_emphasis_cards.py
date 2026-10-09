@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, __file__.rsplit("\\", 1)[0])
 from build_caption_cards import clean_word
 
-LEAD_S = 0.12
+LEAD_S = 0.0  # cards start on the word (see build_caption_cards.py)
 
 WORD_SUBS = {
     "BITTER": "\U0001F171️ETER",  # 🅱️ETER

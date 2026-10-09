@@ -60,14 +60,14 @@ def main():
             print(f"  PHANTOM '{text}' {c['start']:.2f}-{c['end']:.2f}: no voice at all while this card is "
                   f"on screen (peak {seg.max():.2f}x) - invented word or badly misplaced")
             continue
-        # cards are drawn ~0.12s ahead of the word by design (LEAD_S), so a
-        # normal card waits ~0.1-0.2s for its voice; much longer means it is
-        # up early - typically a word stretched across the silence before it
+        # cards start on the word itself (LEAD_S = 0), so a normal card hears its
+        # voice within ~0.1s; much longer means it is up early - typically a word
+        # stretched across the silence before it
         voiced_at = np.argmax(seg > 0.15) / 100
-        if voiced_at > 0.40:
+        if voiced_at > 0.25:
             problems += 1
             print(f"  EARLY  '{text}' {c['start']:.2f}-{c['end']:.2f}: card is up {voiced_at:.2f}s before "
-                  f"any voice (expected ~0.12s)")
+                  f"any voice (expected ~0s)")
         elif c["end"] - c["start"] > 1.0 and len(c["lines"]) == 1 and " " not in c["lines"][0]:
             problems += 1
             print(f"  LONG   '{text}' {c['start']:.2f}-{c['end']:.2f}: one word held {c['end'] - c['start']:.2f}s "
