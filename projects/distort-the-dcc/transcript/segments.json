@@ -1,0 +1,182 @@
+[
+ {
+  "song": "DLB",
+  "start": 4.844,
+  "end": 8.117,
+  "src_at_start": 0.162,
+  "src_offset": -4.7715,
+  "kind": "vocals",
+  "windows": 3
+ },
+ {
+  "song": "DCC",
+  "start": 8.117,
+  "end": 15.753,
+  "src_at_start": 4.818,
+  "src_offset": -2.5609,
+  "kind": "vocals",
+  "windows": 7
+ },
+ {
+  "song": "DLB",
+  "start": 15.753,
+  "end": 24.48,
+  "src_at_start": 17.928,
+  "src_offset": 1.8833,
+  "kind": "vocals",
+  "windows": 8
+ },
+ {
+  "song": "DCC",
+  "start": 24.48,
+  "end": 27.753,
+  "src_at_start": 19.699,
+  "src_offset": -2.5555,
+  "kind": "vocals",
+  "windows": 3
+ },
+ {
+  "song": "DLB",
+  "start": 27.753,
+  "end": 45.208,
+  "src_at_start": 30.157,
+  "src_offset": 1.8905,
+  "kind": "vocals",
+  "windows": 12
+ },
+ {
+  "song": "DCC",
+  "start": 45.208,
+  "end": 47.389,
+  "src_at_start": 38.55,
+  "src_offset": -2.5477,
+  "kind": "vocals",
+  "windows": 2
+ },
+ {
+  "song": "DLB",
+  "start": 47.389,
+  "end": 64.844,
+  "src_at_start": 50.144,
+  "src_offset": 1.8778,
+  "kind": "vocals",
+  "windows": 14
+ },
+ {
+  "song": "DCC",
+  "start": 64.844,
+  "end": 81.208,
+  "src_at_start": 56.387,
+  "src_offset": -2.5623,
+  "kind": "vocals",
+  "windows": 14
+ },
+ {
+  "song": "DLB",
+  "start": 81.208,
+  "end": 97.571,
+  "src_at_start": 86.824,
+  "src_offset": 4.1126,
+  "kind": "vocals",
+  "windows": 12
+ },
+ {
+  "song": "DCC",
+  "start": 97.571,
+  "end": 115.026,
+  "src_at_start": 86.13,
+  "src_offset": -2.5709,
+  "kind": "vocals",
+  "windows": 15
+ },
+ {
+  "song": "DLB",
+  "start": 115.026,
+  "end": 120.48,
+  "src_at_start": 121.252,
+  "src_offset": 4.0961,
+  "kind": "vocals",
+  "windows": 5
+ },
+ {
+  "song": "DCC",
+  "start": 120.48,
+  "end": 124.844,
+  "src_at_start": 108.961,
+  "src_offset": -0.5664,
+  "kind": "inst",
+  "windows": 4
+ },
+ {
+  "song": "DCC",
+  "start": 124.844,
+  "end": 131.389,
+  "src_at_start": 110.93,
+  "src_offset": -2.5645,
+  "kind": "vocals",
+  "windows": 6
+ },
+ {
+  "song": "DLB",
+  "start": 131.389,
+  "end": 135.753,
+  "src_at_start": 137.937,
+  "src_offset": 4.1151,
+  "kind": "vocals",
+  "windows": 3
+ },
+ {
+  "song": "DCC",
+  "start": 135.753,
+  "end": 140.117,
+  "src_at_start": 120.85,
+  "src_offset": -2.5618,
+  "kind": "vocals",
+  "windows": 4
+ },
+ {
+  "song": "DLB",
+  "start": 140.117,
+  "end": 163.026,
+  "src_at_start": 146.825,
+  "src_offset": 4.1132,
+  "kind": "vocals",
+  "windows": 20
+ },
+ {
+  "song": "DLB",
+  "start": 163.026,
+  "end": 180.48,
+  "src_at_start": 152.373,
+  "src_offset": -13.6716,
+  "kind": "vocals",
+  "windows": 16
+ },
+ {
+  "song": "DLB",
+  "start": 180.48,
+  "end": 188.117,
+  "src_at_start": 152.377,
+  "src_offset": -31.4448,
+  "kind": "vocals",
+  "windows": 7
+ },
+ {
+  "song": "DCC",
+  "start": 188.117,
+  "end": 192.48,
+  "src_at_start": 172.421,
+  "src_offset": 1.4055,
+  "kind": "vocals",
+  "windows": 4
+ },
+ {
+  "song": "DCC",
+  "start": 192.48,
+  "end": 197.935,
+  "src_at_start": 172.421,
+  "src_offset": -2.5609,
+  "kind": "vocals",
+  "windows": 5
+ }
+]

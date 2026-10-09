@@ -1,0 +1,48 @@
+{
+ "DCC": [
+  {
+   "start": 3.753,
+   "end": 199.0,
+   "src_at_start": 0.849,
+   "src_offset": -2.5627,
+   "evidence": 124
+  }
+ ],
+ "DLB": [
+  {
+   "start": 4.684,
+   "end": 10.298,
+   "src_at_start": 0.0,
+   "src_offset": -4.7703,
+   "evidence": 5
+  },
+  {
+   "start": 10.298,
+   "end": 64.844,
+   "src_at_start": 12.366,
+   "src_offset": 1.8775,
+   "evidence": 38
+  },
+  {
+   "start": 64.844,
+   "end": 162.48,
+   "src_at_start": 70.156,
+   "src_offset": 4.1116,
+   "evidence": 51
+  },
+  {
+   "start": 162.48,
+   "end": 179.935,
+   "src_at_start": 151.817,
+   "src_offset": -13.6716,
+   "evidence": 15
+  },
+  {
+   "start": 179.935,
+   "end": 199.0,
+   "src_at_start": 151.817,
+   "src_offset": -31.45,
+   "evidence": 7
+  }
+ ]
+}

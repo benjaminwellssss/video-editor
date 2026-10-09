@@ -1,0 +1,64 @@
+[
+ {
+  "clip_id": "a7e194ae-201d-4d4f-8e08-7b465051072c",
+  "start_frame": 113,
+  "end_frame": 5985,
+  "record_frame": 0,
+  "track_index": 1
+ },
+ {
+  "clip_id": "61d0c04f-a6cd-498b-ac62-86ab45420be9",
+  "start_frame": 0,
+  "end_frame": 168,
+  "record_frame": 28,
+  "track_index": 2,
+  "song": "61d0c04f-a6cd-498b-ac62-86ab45420be9"
+ },
+ {
+  "clip_id": "61d0c04f-a6cd-498b-ac62-86ab45420be9",
+  "start_frame": 364,
+  "end_frame": 2001,
+  "record_frame": 196,
+  "track_index": 2,
+  "song": "61d0c04f-a6cd-498b-ac62-86ab45420be9"
+ },
+ {
+  "clip_id": "61d0c04f-a6cd-498b-ac62-86ab45420be9",
+  "start_frame": 2067,
+  "end_frame": 4996,
+  "record_frame": 1833,
+  "track_index": 2,
+  "song": "61d0c04f-a6cd-498b-ac62-86ab45420be9"
+ },
+ {
+  "clip_id": "61d0c04f-a6cd-498b-ac62-86ab45420be9",
+  "start_frame": 4472,
+  "end_frame": 4995,
+  "record_frame": 4762,
+  "track_index": 2,
+  "song": "61d0c04f-a6cd-498b-ac62-86ab45420be9"
+ },
+ {
+  "clip_id": "61d0c04f-a6cd-498b-ac62-86ab45420be9",
+  "start_frame": 4472,
+  "end_frame": 5059,
+  "record_frame": 5285,
+  "track_index": 2,
+  "song": "61d0c04f-a6cd-498b-ac62-86ab45420be9"
+ },
+ {
+  "clip_id": "57d6a32e-5af1-427c-ba1a-17d8be095a74",
+  "start_frame": 28,
+  "end_frame": 5900,
+  "record_frame": 0,
+  "track_index": 3,
+  "song": "57d6a32e-5af1-427c-ba1a-17d8be095a74"
+ },
+ {
+  "clip_id": "a6a3a6a0-e6e0-4ba8-bf35-ff9b7eb20aa0",
+  "start_frame": 0,
+  "end_frame": 241,
+  "record_frame": 4110,
+  "track_index": 4
+ }
+]

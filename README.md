@@ -181,6 +181,11 @@ cheaper middle ground when the base transcript was already good.
   - deliverable folder rules
   - the metadata spec
 
+  `music-video-editing` is the separate skill for music work: song mashups,
+  stems, tempo and key, and music videos built from an Ableton session. It
+  keeps its own scripts; see its
+  [README](.claude/skills/music-video-editing/README.md).
+
   The HyperFrames motion-graphics authoring skills live here too.
 - `docs/`: the workflow flowchart (`workflow.svg`, `workflow.png`).
 - `vendor/`: cloned third-party dependencies (DaVinci Resolve MCP server,
