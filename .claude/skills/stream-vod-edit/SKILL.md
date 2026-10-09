@@ -1276,6 +1276,34 @@ X: https://x.com/beanjahmean
 
 The reference file is `CLIPS/10-02-2026_Northgard/n_tony_godfather_wedding/mafia-bit-cut/metadata.txt`.
 
+#### Title research + 3 title options (user, 2026-10-09)
+
+Before writing a short's title, look at what top Shorts like it actually use, then give the user
+**three title options** to pick from.
+
+1. **Research once per game per batch** with `scripts/yt_research.py <clip_dir>/title_research.md
+   "<search>" ...`. Use 4-8 searches that describe the game and kind of moment ("valheim troll",
+   "valheim funny shorts", "valheim coop funny"). It ranks the Shorts found by views and writes the
+   top 30 titles, tags and hashtags plus a pattern summary (its `.json` keeps every Short found).
+   Reuse that file for every other short from the same game in the batch; don't re-run per clip. It
+   loads ~25 YouTube pages per search, and too many in a row triggers YouTube's "unusual traffic"
+   check. The script stops when that happens. Never try to get past it; wait it out and re-run later.
+2. **Write three title options** shaped by what the top performers do, not by summarizing the clip:
+   - Short: the 2026-10-09 Valheim research had a median of 43 characters.
+   - Formats that win: "When you…" (a relatable situation), "X be like", "Average X Pro", a bold claim
+     ("NOT What You Think").
+   - **A title doesn't have to be on the nose.** A funny, somewhat tangential line beats a literal
+     description. Oddly specific lines from the clip work well ("Outmaneuvered by a Walking Man"), as do
+     jokes riffing on it ("This Troll Bought the Battle Pass").
+   - Give each option about 3 hashtags (the research median): the game's tag, then #shorts / #comedy /
+     #<game>coop.
+3. **Put the options at the top of `metadata.txt`** in a `===== TITLE OPTIONS =====` block: the three
+   options, one line on why each works, and a pointer to `title_research.md`. The platform sections below
+   use option 1 until the user picks; then swap in their pick everywhere and drop the block.
+4. **Tags:** keep the existing TAGS line, but order it by what the research shows top Shorts use (game
+   name, "<game> gameplay", "<game> funny moments", the specific subject). The research shows tags barely
+   matter for Shorts (about a third of top performers use none), so don't pad toward the 450-character limit.
+
 ### Profanity → caption emoji substitution
 
 On-screen caption text (regardless of whether the word is also censored in

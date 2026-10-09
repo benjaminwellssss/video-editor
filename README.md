@@ -132,6 +132,12 @@ moment.
    Reels sections. They use the same title, description and hashtags, not
    reworded per platform. The standard description (thanks for watching, an
    invite to the streams, handle links) is in the `stream-vod-edit` skill.
+   - **Title research:** `yt_research.py` pulls the top Shorts for a game
+     (titles, hidden tags, hashtags, views) into `title_research.md`. Run it
+     once per game per batch.
+   - **Three title options** go at the top of `metadata.txt` for you to pick
+     from. They're short and they don't have to be on the nose; a funny,
+     somewhat tangential line often beats a literal one.
 
 ## Shorts: with or without a pre-render transcription
 
@@ -166,6 +172,7 @@ cheaper middle ground when the base transcript was already good.
   | Caption cards | `build_caption_cards.py`, `build_short_cards_from_segments.py`, `build_sentence_emphasis_cards.py`, `build_speaker_cards.py`, `build_speaker_colors.py`, `build_cards_from_ranges.py` |
   | Rendering | `render_captions.py`, `caption_fx.py`, `render_handle.py`, `render_facecam_frame.py`, `render_static_caption.py`, `render_disclaimer_card.py`, `build_shake_zoom_punch.py` |
   | Checks | `verify_caption_timing.py`, `verify_shorts_batch.py` |
+  | Metadata | `yt_research.py` (top Shorts' titles, tags and hashtags for a game) |
 
 - `.claude/skills/`: Claude Code skills. `stream-vod-edit` is the
   authoritative reference for this pipeline; it covers:
