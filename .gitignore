@@ -7,3 +7,5 @@ vendor/*/
 __pycache__/
 *.pyc
 CLAUDE.md
+*.wav
+projects/*/transcript/stems/
