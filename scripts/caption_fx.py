@@ -14,11 +14,18 @@ Per-card effects (they apply to that card's caption only, never the video):
   vibrate / jitter       - small fast jitter at ~34 Hz (8 px at 1x)
   dance / bounce / groove/wiggle - a smooth vertical bob (not jittery like shake)
   glow / shine / holy / neon / radiant / halo - a brief radiant flash behind the text
+  echo / echoy           - the text drifts side to side with fading, expanding ghost copies
+  a fonts.google.com/specimen/<Font> link - that font (file must be in assets/fonts)
+    for every card of the speaker(s) named in quotes; the note's last color word
+    becomes their fill
+  multiply / multiplying / duplicate / clone - copies of the word fill the screen
+    across the card's time on screen
   a color word (red/green/blue/yellow/orange/purple/pink/white/black/cyan)
     - overrides that card's text color, on top of any of the above
   a bare http(s) URL     - overlay that image/gif near the caption; "until
     the end (of the video)" makes it persist to the end, otherwise it shows
-    for a few seconds. Where it starts (its resting position - there's no
+    for a few seconds. "start" in the note ("start this gif <url>") keeps it up
+    until a later card's "stop gif" note. Where it starts (its resting position - there's no
     slide-in animation for a note-driven overlay, just where it appears):
     a grid phrase like "top left", "middle right", "bottom center",
     "dead center", or a single "top"/"bottom"/"left"/"right"/"center"
@@ -37,7 +44,9 @@ list for a lane):
   - a note containing progressively/gradually/increasingly marks the start
     of a RAMP: the triggering effect ramps up linearly across it and every
     contiguous following card that shares the same effect, ending at
-    whatever's the strongest intensity word found anywhere in that run.
+    whatever's the strongest intensity word found anywhere in that run. On
+    a card with no matching neighbour, the ramp runs inside that one card
+    instead: shake/multiply build up and a note color fades in over its time.
   - "make all instances of "X, Y" do a <effect>" (or "every/whenever/any
     time it says") applies <effect> to every card in the lane whose text
     is one of the quoted words, wherever it appears in the timeline.
@@ -58,10 +67,13 @@ silently dropped - it comes back to a human (or Claude) to handle by hand.
 import re
 
 SCALE_SLOW = {"grow", "growing", "grows", "bigger", "swell", "enlarge", "expand"}
-SCALE_FAST = {"zoom", "zooming", "punch", "push", "pop", "slam"}
-SHAKE = {"shake", "shaking", "rumble", "quake", "camera-shake"}
+SCALE_FAST = {"zoom", "zooming", "punch", "push", "pop", "slam", "big", "large"}
+SHAKE = {"shake", "shakes", "shaking", "shaky", "rumble", "quake", "camera-shake"}
 VIBRATE = {"vibrate", "vibrating", "vibration", "jitter", "tremble", "buzz"}
 DANCE = {"dance", "dancing", "bop", "bopping", "bounce", "bouncing", "groove", "grooving", "wiggle", "wiggling"}
+ECHO = {"echo", "echoy", "echoey", "echoing", "echoes"}
+FONT_LINK_RE = re.compile(r"https?://fonts\.google\.com/specimen/([A-Za-z0-9+]+)\S*")
+MULTIPLY = {"multiply", "multiplying", "multiplies", "duplicate", "duplicating", "clone", "cloning"}
 GLOW = {"glow", "glowing", "holy", "shine", "shining", "radiant", "neon", "halo"}
 
 COLOR_WORDS = {
@@ -89,6 +101,8 @@ MAX_SCALE = 1.9
 RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasingly", "increasing"}
 
 URL_RE = re.compile(r"https?://\S+")
+# a local image instead of a link: an absolute path or one under the repo's assets/ (e.g. word-image rules)
+LOCAL_IMG_RE = re.compile(r"(?:[A-Za-z]:[\\/]|assets[\\/])\S+?\.(?:png|gif|jpe?g|webp)\b", re.I)
 
 # Absolute on-screen anchor for a note-driven image overlay - checked longest
 # (most specific) phrase first so "top left" doesn't get shadowed by a bare
@@ -173,7 +187,7 @@ END_OF_VIDEO_RE = re.compile(r"(?:until|till|til|to)\s+(?:the\s+)?end\b|rest\s+o
 def _text(note):
     """The note with any link removed - words inside a URL ("covers" -> "over",
     ".../red/...") must never read as instructions."""
-    return URL_RE.sub(" ", note)
+    return LOCAL_IMG_RE.sub(" ", URL_RE.sub(" ", note))
 
 
 def _words(note):
@@ -223,10 +237,21 @@ def fx_from_note(note):
     """Return an fx dict for the note, or {} if nothing in it is recognised."""
     if not note:
         return {}
+    fx = {}
+    font = FONT_LINK_RE.search(note)
+    if font:
+        # "<google font link> this font for all of "purple/marlee" text ... make it white":
+        # applies to every card of the named speaker(s); the LAST color word is the new fill
+        fx["font_name"] = font.group(1).replace("+", " ")
+        quoted = re.findall(r'["“]([^"”]+)["”]', note)
+        fx["font_targets"] = sorted({w for q in quoted for w in re.findall(r"[a-z]+", q.lower())})
+        colors = [w for w in re.findall(r"[a-z]+", FONT_LINK_RE.sub(" ", note).lower()) if w in COLOR_WORDS]
+        if colors:
+            fx["font_fill"] = COLOR_WORDS[colors[-1]]
+        return fx
     words = _words(note)
     factor = note_factor(note)
 
-    fx = {}
     if words & SCALE_SLOW:
         fx["scale_to"] = min(1.0 + 0.30 * factor, MAX_SCALE)
     if words & SCALE_FAST:
@@ -245,6 +270,10 @@ def fx_from_note(note):
         fx["dance_hz"] = 2.2
     if words & GLOW:
         fx["glow"] = True
+    if words & ECHO:
+        fx["echo"] = True  # drifting text with fading, expanding ghost copies
+    if words & MULTIPLY:
+        fx["multiply"] = True  # copies of the word spread across the screen over the card
     if not fx and "impact" in words:  # "impact" on its own = a fast punch-in
         fx["scale_to"] = min(1.0 + 0.35 * factor, MAX_SCALE)
         fx["scale_fast"] = True
@@ -253,7 +282,7 @@ def fx_from_note(note):
     if color_hit:
         fx["color"] = COLOR_WORDS[sorted(color_hit)[0]]
 
-    m = URL_RE.search(note)
+    m = URL_RE.search(note) or LOCAL_IMG_RE.search(note)
     if m:
         fx["image_url"] = m.group(0).rstrip(").,”’")
         low = _text(note).lower()
@@ -261,7 +290,10 @@ def fx_from_note(note):
         # card it's attached to (not a fixed guess) - images lingering well past
         # their card was a recurring problem. "until end"/"rest of the video"
         # still overrides to the end of the clip.
-        fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else "card"
+        fx["image_duration"] = "end" if END_OF_VIDEO_RE.search(low) else "stop" if "start" in _words(note) else "card"
+        at = re.search(r'\bstart\b.*?\bat\s+["“]([^"”]+)["”]', _text(note), re.I)
+        if at:
+            fx["image_start_word"] = at.group(1).lower()  # start on an earlier card with this text
         grid = parse_image_position(note)
         if grid:
             fx["image_position"] = grid  # absolute (vertical, horizontal) anchor on the full frame
@@ -269,6 +301,10 @@ def fx_from_note(note):
             fx["image_position"] = "above"  # relative to the caption, legacy default
         else:
             fx["image_position"] = "below"  # default, also covers under/below/beneath
+
+    elif _words(note) & {"stop", "end", "hide"} and (_words(note) & {"gif", "image", "picture", "pic", "photo"}
+                                                   or _words(note) <= {"stop", "end", "hide", "here", "it", "the"}):
+        fx["image_stop"] = True  # ends the previous "start ... <url>" image at this card
 
     return fx
 
@@ -285,6 +321,15 @@ def describe(note, fx):
         parts.append(f'dance {fx["dance_px"]:.0f}px @ {fx["dance_hz"]:.1f}Hz')
     if fx.get("glow"):
         parts.append("glow flash")
+    if fx.get("font_name"):
+        fill = f', fill rgba{tuple(fx["font_fill"])}' if "font_fill" in fx else ""
+        parts.append(f'font {fx["font_name"]} for speaker(s) {"/".join(fx["font_targets"])}{fill}')
+    if fx.get("echo"):
+        parts.append("echo")
+    if fx.get("multiply"):
+        parts.append("multiplying copies")
+    if fx.get("image_stop"):
+        parts.append("stops the started image here")
     if "color" in fx:
         parts.append(f'color -> rgba{tuple(fx["color"])}')
     if "image_url" in fx:
@@ -292,6 +337,8 @@ def describe(note, fx):
             dur = "until end of video"
         elif fx["image_duration"] == "card":
             dur = "card duration"
+        elif fx["image_duration"] == "stop":
+            dur = 'until the next "stop gif" note'
         else:
             dur = f'{fx["image_duration"]:.0f}s'
         pos = fx["image_position"]

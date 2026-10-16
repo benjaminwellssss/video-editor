@@ -25,6 +25,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 import subprocess
 import sys
@@ -60,27 +61,25 @@ TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position -
 
 
 def find_font_choice(cards_path):
-    """The font name saved in this job's "*_speakers.json" sidecar (the
-    caption editor writes {"font": "<name>", "speakers": [...]} there once a
-    font is picked - see caption-editor's Font dropdown). Falls back to
-    DEFAULT_FONT if there's no sidecar, it's the old plain-array speakers
-    format, or it doesn't name a font. cards_path is exactly sys.argv[1]."""
+    """The font saved in this job's speakers sidecar (the caption editor writes {"font": "<name>",
+    "font_file"?: "<path>", "speakers": [...]} once a font is picked). Returns the font file path when the
+    sidecar names one that exists (any installed font picked in the editor), else a FONTS key, else
+    DEFAULT_FONT. The sidecar is "<cards stem>_speakers.json" (captions.json -> captions_speakers.json;
+    the older x_cards.json -> x_speakers.json). cards_path is exactly sys.argv[1]."""
     base = os.path.basename(cards_path)
-    for suffix in ("_cards.json",):
-        if base.endswith(suffix):
-            sidecar = os.path.join(os.path.dirname(cards_path), base[: -len(suffix)] + "_speakers.json")
-            break
-    else:
-        return DEFAULT_FONT
+    stem = base[: -len("_cards.json")] if base.endswith("_cards.json") else os.path.splitext(base)[0]
+    sidecar = os.path.join(os.path.dirname(cards_path), stem + "_speakers.json")
     if not os.path.exists(sidecar):
         return DEFAULT_FONT
     try:
         data = json.load(open(sidecar, encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return DEFAULT_FONT
-    if isinstance(data, dict) and data.get("font") in FONTS:
-        return data["font"]
-    return DEFAULT_FONT
+    if not isinstance(data, dict):
+        return DEFAULT_FONT
+    if data.get("font_file") and os.path.isfile(data["font_file"]):
+        return data["font_file"]
+    return data["font"] if data.get("font") in FONTS else DEFAULT_FONT
 LINE_SPACING_FRAC = 0.20  # gap between top and bottom line = 20% of top line's text height
 SECONDARY_GAP_FRAC = 0.35  # gap between primary block's bottom and secondary block's top
 POP_DURATION = 0.14  # seconds
@@ -126,12 +125,15 @@ SECONDARY_STYLE = {
 
 def apply_font_choice(font_name):
     """Reload PRIMARY_STYLE/SECONDARY_STYLE's fonts in place for font_name (a
-    key in FONTS). Called once from main() with find_font_choice()'s result;
+    key in FONTS, or a font file path). Called once from main() with find_font_choice()'s result;
     a no-op if font_name is already DEFAULT_FONT since the module-level
     globals above already loaded it."""
-    if font_name not in FONTS or font_name == DEFAULT_FONT:
+    if os.path.isfile(font_name):
+        path = font_name
+    elif font_name not in FONTS or font_name == DEFAULT_FONT:
         return
-    path = os.path.join(FONTS_DIR, FONTS[font_name])
+    else:
+        path = os.path.join(FONTS_DIR, FONTS[font_name])
     PRIMARY_STYLE["font"] = ImageFont.truetype(path, FONT_SIZE)
     SECONDARY_STYLE["font"] = ImageFont.truetype(path, FONT_SIZE_SECONDARY)
 
@@ -346,7 +348,7 @@ def compose_card(card, t, style, cache):
     fill_override = card.get("fill")
 
     def get_line_image(words, active_idx):
-        key = (style["font"].size, tuple(words), active_idx, tuple(fill_override) if fill_override else None)
+        key = (style["font"].path, style["font"].size, tuple(words), active_idx, tuple(fill_override) if fill_override else None)
         if key not in cache:
             cache[key] = render_line_image(words, active_idx, style, fill_override)
         return cache[key]
@@ -504,8 +506,9 @@ def load_cached_image(url, cache_dir):
     not-yet-cached URL just gets reported and skipped rather than blocking
     the render."""
     h = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
-    for ext in (".gif", ".webp", ".png", ".jpg", ".jpeg"):
-        p = os.path.join(cache_dir, h + ext)
+    local = url if os.path.isabs(url) else os.path.join(os.path.dirname(FONTS_DIR), "..", url)  # assets/... -> repo
+    candidates = [local] if not url.startswith("http") else [os.path.join(cache_dir, h + e) for e in (".gif", ".webp", ".png", ".jpg", ".jpeg")]
+    for p in candidates:
         if os.path.exists(p):
             im = Image.open(p)
             n_frames = getattr(im, "n_frames", 1)
@@ -553,7 +556,17 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
     cx = W // 2
     progress = ease_out_back(min(1.0, (t - card["start"]) / POP_DURATION))
     scale = (0.55 + 0.45 * progress) * card.get("emphasis_scale", 1.0)
+    if card.get("_font"):
+        style = dict(style, font=load_font(card["_font"], style["font"].size))
     fx = card.get("_fx") or {}
+    dur = max(card["end"] - card["start"], 0.05)
+    u = min(1.0, max(0.0, (t - card["start"]) / dur))
+    if fx.get("ramp_in"):
+        fx = dict(fx, shake_px=fx.get("shake_px", 0) * u)
+        if fx.get("color"):
+            q = round(u * 10) / 10  # stepped, so the line-image cache stays small
+            base = card.get("_base_fill") or style["base_fill"]
+            card = dict(card, fill=[round(b + (c - b) * q) for b, c in zip(base, fx["color"])])
     dx = dy = 0
     angle = 0.0
     if fx:
@@ -581,8 +594,69 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
             gx = paste_x - (glow_img.width - resized.width) // 2
             gy = paste_y - (glow_img.height - resized.height) // 2
             composite_clipped(frame, glow_img, gx + dx, gy + dy)
+    if fx.get("multiply"):
+        draw_multiplied(frame, resized, fx, t, u)
+    if fx.get("echo"):
+        sway = lambda tt: int(40 * math.sin(2 * math.pi * 0.8 * (tt - card["start"])))
+        dx += sway(t)
+        for k in (3, 2, 1):
+            g = resized.resize((int(resized.width * (1 + 0.12 * k)), int(resized.height * (1 + 0.12 * k))), Image.LANCZOS)
+            g.putalpha(g.getchannel("A").point(lambda a, f=0.4 / k: int(a * f)))
+            composite_clipped(frame, g, paste_x - (g.width - resized.width) // 2 + sway(t - 0.08 * k) + dx - sway(t),
+                              paste_y - (g.height - resized.height) // 2 + dy)
     composite_clipped(frame, resized, paste_x + dx, paste_y + dy)
     return canvas_y + bottom_edge_y * scale
+
+
+_FONTS = {}
+
+
+def load_font(path, size):
+    if (path, size) not in _FONTS:
+        _FONTS[path, size] = ImageFont.truetype(path, size)
+    return _FONTS[path, size]
+
+
+def apply_font_notes(lanes):
+    """A Google Fonts link note restyles every card (in any lane) of the
+    speaker(s) it names - see caption_fx.fx_from_note."""
+    for cards in lanes:
+        for card in cards:
+            fx = card["_fx"]
+            if not fx.get("font_name"):
+                continue
+            key = fx["font_name"].replace(" ", "").lower()
+            path = next((os.path.join(FONTS_DIR, f) for f in os.listdir(FONTS_DIR)
+                         if f.lower().startswith(key) and f.lower().endswith((".ttf", ".otf"))), None)
+            if not path:
+                print(f'  font {fx["font_name"]} NOT FOUND in {FONTS_DIR} - add the .ttf and re-render')
+                continue
+            n = 0
+            for other in (c for cs in lanes for c in cs):
+                if (other.get("speaker") or "").lower() in fx["font_targets"]:
+                    other["_font"] = path
+                    if "font_fill" in fx:
+                        other["fill"] = list(fx["font_fill"])
+                    n += 1
+            print(f'  font {fx["font_name"]} -> {n} cards')
+
+
+MULTIPLY_MAX = 16
+
+
+def draw_multiplied(frame, img, fx, t, u):
+    """Copies of the card scattered across the frame, more of them as the
+    card goes on; fixed seeds so re-renders are identical."""
+    for i in range(int(u * MULTIPLY_MAX)):
+        rnd = random.Random(i)
+        s = rnd.uniform(0.45, 0.85)
+        copy = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.LANCZOS)
+        if rnd.random() < 0.5:
+            copy = copy.rotate(rnd.uniform(-20, 20), resample=Image.BICUBIC, expand=True)
+        dx, dy, _ = fx_shake(fx, t + i * 0.37)
+        x = int(rnd.uniform(0, W) - copy.width / 2) + dx
+        y = int(rnd.uniform(220, H - 260) - copy.height / 2) + dy
+        composite_clipped(frame, copy, x, y)
 
 
 RAMPABLE_KEYS = ("shake_px", "scale_to", "dance_px")
@@ -624,6 +698,7 @@ def apply_fx_passes(cards, lane_no):
             continue
         keys = [k for k in RAMPABLE_KEYS if card["_fx"].get(k)]
         if not keys:
+            card["_fx"]["ramp_in"] = True  # e.g. just a color: fade it in across this card
             continue
         group = [card]
         j = i + 1
@@ -634,6 +709,7 @@ def apply_fx_passes(cards, lane_no):
             group.append(nxt)
             j += 1
         if len(group) < 2:
+            card["_fx"]["ramp_in"] = True  # nothing to ramp across: build up inside this one card
             continue
         start_factor = note_factor(card.get("note"))
         end_factor = max((note_factor(c.get("note")) for c in group), default=start_factor)
@@ -665,6 +741,7 @@ def apply_fx_passes(cards, lane_no):
 
     for card in cards:
         if card["_fx"].get("color"):
+            card["_base_fill"] = card.get("fill")
             card["fill"] = list(card["_fx"]["color"])
         if card.get("note"):
             pos = parse_text_position(card["note"])
@@ -683,11 +760,14 @@ def gather_image_overlays(lanes, cards_path, duration_s):
     overlays = []
     cache = {}  # url -> (resized_frames, durations, total_ms), computed once per URL
     for cards in lanes:
-        for card in cards:
+        for ci, card in enumerate(cards):
             fx = card["_fx"]
             url = fx.get("image_url")
             if not url:
                 continue
+            word = fx.get("image_start_word")
+            begin = next((c for c in reversed(cards[:ci])
+                          if re.sub(r"[^a-z' ]", "", " ".join(c.get("lines", [])).lower()).strip() == word), card) if word else card
             if url not in cache:
                 os.makedirs(cache_dir, exist_ok=True)
                 frames, durations = load_cached_image(url, cache_dir)
@@ -701,11 +781,14 @@ def gather_image_overlays(lanes, cards_path, duration_s):
             if entry is None:
                 continue
             frames, durations, total_ms = entry
-            start = card["start"]
+            start = begin["start"]
             if fx["image_duration"] == "end":
                 end = duration_s
             elif fx["image_duration"] == "card":
                 end = min(duration_s, card["end"])
+            elif fx["image_duration"] == "stop":
+                stop = next((c for c in cards[ci + 1:] if c["_fx"].get("image_stop")), None)
+                end = min(duration_s, stop["start"] if stop else card["end"])
             else:
                 end = min(duration_s, start + fx["image_duration"])
             prev = overlays[-1] if overlays else None
@@ -756,6 +839,7 @@ def main():
     lanes = split_lanes(json.load(open(cards_path, encoding="utf-8")))
     for li, cards in enumerate(lanes):
         apply_fx_passes(cards, li)
+    apply_font_notes(lanes)
     if len(lanes) > 1:
         print(f"  {len(lanes)} simultaneous lanes: " + ", ".join(str(len(c)) for c in lanes) + " cards")
     image_overlays = gather_image_overlays(lanes, cards_path, duration_s)
@@ -775,17 +859,18 @@ def main():
         t = fi / FPS
         frame = Image.new("RGBA", (W, H), (0, 0, 0, 0))
 
+        # The highest timeline showing a caption right now draws big on the seam; any others showing at the
+        # same moment stack smaller beneath it. (With one timeline per speaker, a lone caption from a lower
+        # timeline still draws full size.)
         bottom = None  # bottom edge of the last lane drawn; sub-lanes stack under it
         for li, cards in enumerate(lanes):
             card = current_card(cards, ci_state, li, t) if cards else None
             if card is None or not card["lines"]:
                 continue  # a silent note-only card (see sanitize_cards) draws nothing
-            if li == 0:
+            if bottom is None:
                 bottom = draw_card(frame, card, PRIMARY_STYLE, t, cache, primary=True)
             else:
-                # stack below whatever is showing above it, else on the seam
-                base = bottom if bottom is not None else BAR_CENTER_Y
-                bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=base)
+                bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=bottom)
 
         for ov in image_overlays:
             if ov["start"] <= t < ov["end"]:
