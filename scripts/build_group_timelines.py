@@ -7,12 +7,16 @@ so it needs Resolve running with the bridge up and the target project open.
 Usage:
     python scripts/build_group_timelines.py <groups.json> [group name ...]
 
-groups.json = list of {"name", "kind": "n"|"dw", "clip_id" (media pool item id),
+groups.json = list of {"name", "kind": "n"|"n_window"|"dw", "clip_id" (media pool item id),
                        "infos": [{start_frame,end_frame,record_frame}], "markers": [[rec_frame, label]]}
 
-Layout recipe (1920x1080 timeline, the saved facecam+blurred-bg+gameplay build):
-    V1 (audio too) bg zoom 2.12 | V2 gameplay zoom 0.84 tilt -88 | V3 facecam pan -727,
-    crop left 1458 + top (760.5 for the 462x320 window, 683 for Deadweight's 462x397 window).
+Layout recipe (1920x1080 timeline, then a centered 608x1080 crop to 9:16):
+    V1 (audio too) blurred bg zoom 2.12 | V2 gameplay zoom 0.84 tilt -88 | V3 facecam, per FACE:
+    "n"        the user's current format (2026-10-13): the bare webcam picture - the facecam.exe
+               window's title bar, border and LIVE bar cropped away - zoomed to the full 9:16 width
+               and sitting at the top. For the 462x320 facecam window at the bottom-right.
+    "n_window" the older format: the whole facecam.exe window, unscaled (same 462x320 window).
+    "dw"       the older format for Deadweight's taller 462x397 window.
 The blur on V1 is not an API property; it is applied by hand in Resolve.
 """
 import json
@@ -22,7 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "vendor" / "davinci-resolve-mcp"))
 from src.utils.resolve_bridge_client import connect  # noqa: E402
 
-FACE = {"n": (760.5, 757.0), "dw": (683.0, 679.5)}  # (crop top, tilt)
+FACE = {
+    "n": {"Pan": -1106, "Tilt": 914, "ZoomX": 1.53, "ZoomY": 1.53,
+          "CropLeft": 1472, "CropRight": 18, "CropTop": 776, "CropBottom": 69},
+    "n_window": {"Pan": -727, "Tilt": 757.0, "CropLeft": 1458, "CropTop": 760.5},
+    "dw": {"Pan": -727, "Tilt": 679.5, "CropLeft": 1458, "CropTop": 683.0},
+}
 
 
 def find_clip(folder, clip_id):
@@ -66,7 +75,7 @@ def build(project, pool, group):
     n = len(group["infos"])
     if not res or len(res) != 3 * n:
         raise SystemExit(f"{name}: appended {len(res) if res else 0}, expected {3*n}")
-    crop_top, tilt = FACE[group["kind"]]
+    face = FACE[group["kind"]]
     bad = 0
     for track in (1, 2, 3):
         items = tl.GetItemListInTrack("video", track)
@@ -78,8 +87,7 @@ def build(project, pool, group):
             elif track == 2:
                 ok = it.SetProperty("ZoomX", 0.84) and it.SetProperty("ZoomY", 0.84) and it.SetProperty("Tilt", -88)
             else:
-                ok = (it.SetProperty("Pan", -727) and it.SetProperty("Tilt", tilt)
-                      and it.SetProperty("CropLeft", 1458) and it.SetProperty("CropTop", crop_top))
+                ok = all(it.SetProperty(k, v) for k, v in face.items())
             bad += 0 if ok else 1
     for rec, label in group["markers"]:
         tl.AddMarker(rec, "Yellow", label, "", 1)

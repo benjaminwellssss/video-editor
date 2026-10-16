@@ -177,7 +177,28 @@ The reliable process:
 5. If the user later says a labeled speaker is wrong, stop all audio work
    immediately and wait for them to check manually — don't keep guessing.
 
-### This rig's specific 4-track layout (confirmed 2026-09-16/17)
+### This rig's 4-track layout: CURRENT (from the user's audio-routing notes, 2026-10-09)
+
+Source: `Audio-Routing-Notes_2026-10-09.md` in the user's streaming folder (an OBS + Voicemeeter
+snapshot of the stream PC). **The OBS track labels are shifted by one; go by content, not by name:**
+
+| VLC track | ffmpeg index | OBS label | Actual content |
+|---|---|---|---|
+| 1 | 0 | "Ben's Microphone" | **Full mix**: mic + Discord + game/music + alerts. Still the transcription source. |
+| 2 | 1 | "Discord" | **Ben's mic** + alerts |
+| 3 | 2 | "Music / Gameplay" | **Discord** (co-op partners) + alerts. Clean and isolated now. |
+| 4 | 3 | "Alerts" | **Game + music** + alerts. One shared stream, so music can't be separated from game audio. The bus is boosted +12 dB, so expect it to run hot or clip. |
+
+Verified on the 2026-10-09 VOD: track 3's loudness does not follow the mic (correlation −0.14 / −0.31,
+turn-taking), while mic and Discord both track the full mix. This means **speaker separation is
+available without diarization**: track 2 = Ben, track 3 = everyone else on Discord. Use that for
+speaker-colored captions and for `verify_caption_timing.py` (a clean voice reference). Alerts bleed into
+every track.
+
+The section below is the **older (2026-09) layout**, kept for recordings from before the routing changed.
+Its "track 3 is a near-duplicate of the full mix" no longer holds.
+
+### This rig's specific 4-track layout (confirmed 2026-09-16/17, superseded 2026-10-09)
 
 Once identified for a given rig, a track layout is a standing fact about the
 hardware/software setup, not a one-off finding — reuse it on the next VOD
@@ -403,6 +424,31 @@ explicitly asks for the diarized treatment and is told the time cost upfront.
   1080x1920) — expect some softness, there's no higher-res facecam source
   to draw on. Re-derive the crop's x-offset if the subject isn't
   horizontally centered in their own webcam box.
+
+### Resolve 3-track short recipe: CURRENT facecam format (user, 2026-10-13)
+
+Shorts are cut on a **1920x1080, 30 fps** Resolve timeline and center-cropped to 9:16 afterwards
+(`crop=608:1080:656:0,scale=1080:1920`). The same source clip sits on three tracks:
+
+| Track | Role | Values |
+|---|---|---|
+| V1 (+ audio) | blurred background | Zoom 2.12. The blur is added by hand; it isn't an API property. |
+| V2 | gameplay | Zoom 0.84, Tilt -88 |
+| V3 | **facecam: the bare webcam picture** | **Pan -1106, Tilt 914, Zoom 1.53, CropLeft 1472, CropRight 18, CropTop 776, CropBottom 69** |
+
+The V3 crop cuts away the whole facecam.exe window chrome (title bar, border, LIVE bar) and keeps only
+the webcam picture. Scaled to 1.53, it spans the full width of the 9:16 frame and sits at the top.
+This replaced the older V3 (Pan -727, Tilt 757, CropLeft 1458, CropTop 760.5, no zoom), which kept the
+whole window. The user set the new values by hand on the "R - Goblin Child" timeline
+(`shorts_10-09-2026` project). `scripts/build_group_timelines.py` applies them as its default `"n"` kind;
+the old one is `"n_window"`.
+
+The numbers are for the current OBS layout: a 462x320 facecam window at the bottom-right of the
+1920x1080 recording. If the layout moves, re-derive them from a timeline the user has adjusted, and
+read every V3 clip back, since a short split clip can keep stale values.
+
+The audio tracks are documented in the 2026-10-09 track layout section above: A1 is the full mix
+(disable it if the separate tracks are on the timeline), A2 mic, A3 Discord, A4 game + music.
 
 ### Vertical short layout: facecam/gameplay split (current, corrected)
 

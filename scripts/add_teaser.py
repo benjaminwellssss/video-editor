@@ -97,10 +97,11 @@ def snap(cards, start, end):
     inside = [c for c in cards if c["start"] < end]
     last = max(inside, key=lambda c: c["start"])
     later = [c for c in cards if c["start"] > last["start"]]
-    b = last["end"] + TAIL
+    # a card can be held long past its word (across a pause); never drag that pause into the teaser
+    b = min(last["end"] + TAIL, last["start"] + 1.2)
     if later:
-        b = min(b, later[0]["start"] + 0.10)  # cards lead their word by ~0.12 s, so this stays before it
-    return max(0.0, a), max(b, last["end"])
+        b = min(b, later[0]["start"] - 0.02)  # cards start on their word, so stop just before the next one
+    return max(0.0, a), max(b, last["start"] + 0.1)
 
 
 def tc(x):
