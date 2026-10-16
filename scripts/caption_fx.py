@@ -298,9 +298,11 @@ def fx_from_note(note):
         if grid:
             fx["image_position"] = grid  # absolute (vertical, horizontal) anchor on the full frame
         elif _words(note) & {"above", "over"}:
-            fx["image_position"] = "above"  # relative to the caption, legacy default
+            fx["image_position"] = "above"  # relative to the caption
+        elif _words(note) & {"below", "under", "beneath"}:
+            fx["image_position"] = "below"
         else:
-            fx["image_position"] = "below"  # default, also covers under/below/beneath
+            fx["image_position"] = "box"  # default: the gameplay box just under the facecam (render_captions IMG_BOX)
 
     elif _words(note) & {"stop", "end", "hide"} and (_words(note) & {"gif", "image", "picture", "pic", "photo"}
                                                    or _words(note) <= {"stop", "end", "hide", "here", "it", "the"}):

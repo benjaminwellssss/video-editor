@@ -14,6 +14,7 @@ import re
 import sys
 
 RULES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "word_images.json")
+WORD_RULE_TAG = "(word rule)"  # render_captions never pairs these into start/end spans
 
 
 def load_rules():
@@ -30,7 +31,7 @@ def apply(cards, rules, seed):
         imgs = rules[word]
         key = id(imgs)  # aliases share a counter with the word they point to
         start = int(hashlib.sha1(seed.encode()).hexdigest(), 16) % len(imgs)
-        card["note"] = imgs[(start + used.get(key, 0)) % len(imgs)]
+        card["note"] = imgs[(start + used.get(key, 0)) % len(imgs)] + " " + WORD_RULE_TAG
         used[key] = used.get(key, 0) + 1
     return sum(used.values())
 

@@ -1,6 +1,9 @@
 """Render animated pop-in captions (up to 2 lines x 2 words) as a transparent overlay video.
 
-Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov>
+Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov> [--voices-only]
+
+--voices-only renders just the "who's talking" overlay (speaker pills, lighting up while they talk) as its
+own transparent layer, to composite last when the speakers sidecar has "voice_overlay": true.
 
 cards.json is either:
   - a flat list of {"start", "end", "lines", "words"?, "fill"?, "lane"?, "note"?}. "lane"
@@ -60,23 +63,25 @@ BAR_CENTER_Y = 670  # 2026-09-30: raised for the new Resolve-build + ffmpeg-cent
 TEXT_ANCHOR_BOTTOM = 1550  # "near the bottom" / "under my face" text position - low enough to clear a full-facecam subject's face, high enough to leave room for a 2-line block + platform UI safe zone above H=1920
 
 
+def load_sidecar(cards_path):
+    """This job's speakers sidecar as a dict ({} if missing or the old plain-array format). It's
+    "<cards stem>_speakers.json": captions.json -> captions_speakers.json, x_cards.json -> x_speakers.json."""
+    base = os.path.basename(cards_path)
+    stem = base[: -len("_cards.json")] if base.endswith("_cards.json") else os.path.splitext(base)[0]
+    try:
+        data = json.load(open(os.path.join(os.path.dirname(cards_path), stem + "_speakers.json"), encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def find_font_choice(cards_path):
     """The font saved in this job's speakers sidecar (the caption editor writes {"font": "<name>",
     "font_file"?: "<path>", "speakers": [...]} once a font is picked). Returns the font file path when the
     sidecar names one that exists (any installed font picked in the editor), else a FONTS key, else
     DEFAULT_FONT. The sidecar is "<cards stem>_speakers.json" (captions.json -> captions_speakers.json;
     the older x_cards.json -> x_speakers.json). cards_path is exactly sys.argv[1]."""
-    base = os.path.basename(cards_path)
-    stem = base[: -len("_cards.json")] if base.endswith("_cards.json") else os.path.splitext(base)[0]
-    sidecar = os.path.join(os.path.dirname(cards_path), stem + "_speakers.json")
-    if not os.path.exists(sidecar):
-        return DEFAULT_FONT
-    try:
-        data = json.load(open(sidecar, encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return DEFAULT_FONT
-    if not isinstance(data, dict):
-        return DEFAULT_FONT
+    data = load_sidecar(cards_path)
     if data.get("font_file") and os.path.isfile(data["font_file"]):
         return data["font_file"]
     return data["font"] if data.get("font") in FONTS else DEFAULT_FONT
@@ -772,9 +777,7 @@ def gather_image_overlays(lanes, cards_path, duration_s):
                 os.makedirs(cache_dir, exist_ok=True)
                 frames, durations = load_cached_image(url, cache_dir)
                 if frames is not None:
-                    target_w = int(W * 0.55)
-                    resized = [f.resize((target_w, int(f.height * target_w / f.width)), Image.LANCZOS) for f in frames]
-                    cache[url] = (resized, durations, sum(durations))
+                    cache[url] = ([fit_image(f) for f in frames], durations, sum(durations))
                 else:
                     cache[url] = None
             entry = cache[url]
@@ -801,8 +804,42 @@ def gather_image_overlays(lanes, cards_path, duration_s):
             overlays.append({
                 "start": start, "end": end, "frames": frames, "durations": durations,
                 "total_ms": total_ms, "position": fx["image_position"], "url": url,
+                # a plain link (not a word-rule image, not start/stop) can pair with its next use - see below
+                "pairable": fx["image_duration"] == "card" and "(word rule)" not in (card.get("note") or ""),
             })
-    return overlays
+    return pair_image_spans(overlays)
+
+
+def pair_image_spans(overlays):
+    """The same link pasted on a start caption and an end caption shows the image the whole way between:
+    plain uses of one link pair up in time order (1st with 2nd, 3rd with 4th...). Back-to-back uses were
+    already merged into one overlay above."""
+    out, open_by_url = [], {}
+    for ov in sorted(overlays, key=lambda o: o["start"]):
+        key = (ov["url"], str(ov["position"]))
+        first = open_by_url.pop(key, None) if ov["pairable"] else None
+        if first:
+            first["end"] = max(first["end"], ov["end"])
+            continue
+        if ov["pairable"]:
+            open_by_url[key] = ov
+        out.append(ov)
+    return out
+
+
+# Default image spot: the gameplay box just under the facecam, left of centre. Images are scaled to IMG_H
+# tall (wider is fine) and centre-cropped if wider than IMG_MAX_W. A position word in the note moves it.
+IMG_BOX_CX, IMG_BOX_TOP = 592, 632
+IMG_H, IMG_MAX_W = 465, 1000
+
+
+def fit_image(img):
+    w = max(1, round(img.width * IMG_H / img.height))
+    img = img.resize((w, IMG_H), Image.LANCZOS)
+    if w > IMG_MAX_W:
+        x = (w - IMG_MAX_W) // 2
+        img = img.crop((x, 0, x + IMG_MAX_W, IMG_H))
+    return img
 
 
 def draw_image_overlay(frame, ov, t):
@@ -824,15 +861,106 @@ def draw_image_overlay(frame, ov, t):
         v, h, margin = pos[0], pos[1], 24
         ox = margin if h == "left" else W - img.width - margin if h == "right" else (W - img.width) // 2
         oy = margin if v == "top" else H - img.height - margin if v == "bottom" else (H - img.height) // 2
+    elif pos == "box":
+        ox = max(0, min(IMG_BOX_CX - img.width // 2, W - img.width))
+        oy = IMG_BOX_TOP
     else:
-        # legacy: relative to the caption bar
+        # relative to the caption bar
         ox = (W - img.width) // 2
         oy = BAR_CENTER_Y + 260 if pos == "below" else BAR_CENTER_Y - 260 - img.height
     composite_clipped(frame, img, ox, oy)
 
 
+def apply_speaker_fonts(lanes, sidecar):
+    """A speaker's own font (picked in the caption editor) for all their captions, unless a note already
+    set one. Uses font_file when it exists, else a FONTS name."""
+    for sp in sidecar.get("speakers", []):
+        path = sp.get("font_file") if sp.get("font_file") and os.path.isfile(sp.get("font_file", "")) else None
+        if not path and sp.get("font") in FONTS:
+            path = os.path.join(FONTS_DIR, FONTS[sp["font"]])
+        if not path:
+            continue
+        n = 0
+        for card in (c for cards in lanes for c in cards):
+            if card.get("speaker") == sp.get("name") and not card.get("_font"):
+                card["_font"] = path
+                n += 1
+        if n:
+            print(f"  {sp['name']}'s font -> {os.path.basename(path)} ({n} cards)")
+
+
+# ---- "who's talking" overlay, the channel's dark-pill style: a round profile picture + @handle per speaker,
+# bottom-left of the facecam. Whoever has a caption on screen lights up - a glowing ring and pill outline in
+# their colour. It's its own export layer (render_captions.py ... --voices-only), so it can be switched on or
+# off as the last layer of the composite; the caption editor's Voice overlay toggle saves "voice_overlay".
+# Speakers' "handle" and "avatar" (an image path) come from the speakers sidecar.
+VO_X, VO_BOTTOM, VO_ROW, VO_AV = 30, 572, 64, 50
+VO_FONT_FILE = os.path.join(os.environ.get("WINDIR", ""), "Fonts", "segoeuib.ttf")  # Segoe UI Bold
+VO_FONT = ImageFont.truetype(VO_FONT_FILE, 27)
+VO_INITIAL = ImageFont.truetype(VO_FONT_FILE, 24)
+VO_PILL = (24, 27, 33, 225)      # the overlays' "Solid" pill
+VO_TEXT = (226, 230, 236, 255)
+
+
+def voice_overlay_speakers(lanes, sidecar):
+    """[{name, label, color, avatar}] in timeline order, for speakers who have captions."""
+    info = {sp.get("name"): sp for sp in sidecar.get("speakers", [])}
+    out, seen = [], set()
+    for cards in lanes:
+        for c in cards:
+            n = c.get("speaker")
+            if not n or n in seen:
+                continue
+            seen.add(n)
+            sp = info.get(n, {})
+            color = (tuple(int(sp["color"][i:i + 2], 16) for i in (1, 3, 5)) + (255,)
+                     if str(sp.get("color", "")).startswith("#") else tuple(c.get("fill") or (200, 200, 200, 255)))
+            avatar = None
+            if sp.get("avatar") and os.path.isfile(sp["avatar"]):
+                im = Image.open(sp["avatar"]).convert("RGBA").resize((VO_AV, VO_AV), Image.LANCZOS)
+                mask = Image.new("L", (VO_AV * 4, VO_AV * 4), 0)
+                ImageDraw.Draw(mask).ellipse((0, 0, VO_AV * 4 - 1, VO_AV * 4 - 1), fill=255)
+                im.putalpha(mask.resize((VO_AV, VO_AV), Image.LANCZOS))
+                avatar = im
+            out.append({"name": n, "label": "@" + sp["handle"] if sp.get("handle") else n,
+                        "color": color, "avatar": avatar})
+    return out
+
+
+def draw_voice_overlay(frame, voices, talking):
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    top = VO_BOTTOM - VO_ROW * len(voices)
+    for i, v in enumerate(voices):
+        y = top + i * VO_ROW
+        on = v["name"] in talking
+        color = v["color"]
+        tw = d.textlength(v["label"], font=VO_FONT)
+        x0, y0 = VO_X, y + (VO_ROW - VO_AV) // 2
+        pill = (x0 - 6, y0 - 6, x0 + VO_AV + 18 + tw + 20, y0 + VO_AV + 6)
+        if on:  # soft glow behind the whole pill
+            glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            ImageDraw.Draw(glow).rounded_rectangle(pill, (VO_AV + 12) // 2, fill=color[:3] + (130,))
+            layer.alpha_composite(glow.filter(ImageFilter.GaussianBlur(9)))
+        d.rounded_rectangle(pill, (VO_AV + 12) // 2, fill=VO_PILL, outline=color if on else (52, 58, 66, 255), width=3)
+        d.ellipse((x0 - 3, y0 - 3, x0 + VO_AV + 3, y0 + VO_AV + 3), fill=color if on else (52, 58, 66, 255))
+        if v["avatar"]:
+            av = v["avatar"]
+            if not on:  # dim the picture of anyone not talking (blended, not painted over)
+                av = av.copy()
+                av.putalpha(av.getchannel("A").point(lambda a: a * 0.6))
+            layer.alpha_composite(av, (x0, y0))
+        else:
+            d.ellipse((x0, y0, x0 + VO_AV, y0 + VO_AV), fill=(43, 47, 51, 255))
+            d.text((x0 + VO_AV / 2, y0 + VO_AV / 2), v["name"][:1].upper(), font=VO_INITIAL, anchor="mm", fill=VO_TEXT)
+        d.text((x0 + VO_AV + 16, y0 + VO_AV / 2), v["label"], font=VO_FONT, anchor="lm",
+               fill=color if on else VO_TEXT[:3] + (205,))
+    frame.alpha_composite(layer)
+
+
 def main():
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+    voices_only = "--voices-only" in sys.argv[4:]  # render just the "who's talking" layer
     font_choice = find_font_choice(cards_path)
     apply_font_choice(font_choice)
     print(f"  font: {font_choice}")
@@ -840,9 +968,14 @@ def main():
     for li, cards in enumerate(lanes):
         apply_fx_passes(cards, li)
     apply_font_notes(lanes)
+    sidecar = load_sidecar(cards_path)
+    apply_speaker_fonts(lanes, sidecar)
+    voices = voice_overlay_speakers(lanes, sidecar) if voices_only else []
+    if voices_only:
+        print("  voice overlay layer: " + ", ".join(v["label"] for v in voices))
     if len(lanes) > 1:
         print(f"  {len(lanes)} simultaneous lanes: " + ", ".join(str(len(c)) for c in lanes) + " cards")
-    image_overlays = gather_image_overlays(lanes, cards_path, duration_s)
+    image_overlays = [] if voices_only else gather_image_overlays(lanes, cards_path, duration_s)
     total_frames = int(round(duration_s * FPS))
 
     cache = {}
@@ -862,19 +995,27 @@ def main():
         # The highest timeline showing a caption right now draws big on the seam; any others showing at the
         # same moment stack smaller beneath it. (With one timeline per speaker, a lone caption from a lower
         # timeline still draws full size.)
+        for ov in image_overlays:  # images first, so captions always read on top of them
+            if ov["start"] <= t < ov["end"]:
+                draw_image_overlay(frame, ov, t)
+
+        talking = set()
         bottom = None  # bottom edge of the last lane drawn; sub-lanes stack under it
         for li, cards in enumerate(lanes):
             card = current_card(cards, ci_state, li, t) if cards else None
             if card is None or not card["lines"]:
                 continue  # a silent note-only card (see sanitize_cards) draws nothing
+            if card.get("speaker"):
+                talking.add(card["speaker"])
+            if voices_only:
+                continue
             if bottom is None:
                 bottom = draw_card(frame, card, PRIMARY_STYLE, t, cache, primary=True)
             else:
                 bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=bottom)
 
-        for ov in image_overlays:
-            if ov["start"] <= t < ov["end"]:
-                draw_image_overlay(frame, ov, t)
+        if voices_only:
+            draw_voice_overlay(frame, voices, talking)
 
         frame_bytes = frame.tobytes()
         ff.stdin.write(frame_bytes)
