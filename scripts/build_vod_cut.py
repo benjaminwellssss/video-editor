@@ -22,6 +22,8 @@ Plan JSON keys:
     gap_min / gap_keep / lead / tail   dead-air tightening (defaults 3.0 / 1.0->lead+tail)
     excise         regexes of words to cut out (default: fuck variants)
     ranges         [[start_s, end_s, "chapter label (optional)"], ...]
+    intro_card     optional {"png": transparent 1920x1080 text, "seconds": N}: the first N s of
+                   the cut are blurred with the PNG on top (laid over the footage, so no timing shifts)
 """
 import json
 import re
@@ -193,8 +195,9 @@ def encode_segment(job):
     d = sg["end"] - sg["start"]
     fade = 0.012
     af = f"afade=t=in:d={fade},afade=t=out:st={max(d-fade,0):.3f}:d={fade}"
-    cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{sg['start']:.3f}", "-t", f"{d:.3f}", "-i", plan["source"],
-           "-map", "0:v:0", "-map", f"0:a:{plan.get('audio_stream', 0)}",
+    card_in, video_map = intro_card_args(plan, i)
+    cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{sg['start']:.3f}", "-t", f"{d:.3f}", "-i", plan["source"], *card_in,
+           *video_map, "-map", f"0:a:{plan.get('audio_stream', 0)}",
            "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "22", "-b:v", "0",
            "-maxrate", "12M", "-bufsize", "24M", "-g", "60", "-pix_fmt", "yuv420p", "-r", str(plan.get("fps", 30)),
            "-af", af, "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(out) + ".part.mkv"]
@@ -204,6 +207,16 @@ def encode_segment(job):
         return i, False, r.stderr[-400:]
     part.replace(out)
     return i, True, ""
+
+
+def intro_card_args(plan, i):
+    card = plan.get("intro_card")
+    if not card or i != 0:
+        return [], ["-map", "0:v:0"]
+    n = card["seconds"]
+    graph = (f"[0:v]split[a][b];[b]boxblur=40:3[bl];[a][bl]overlay=enable='lt(t,{n})'[v1];"
+             f"[v1][1:v]overlay=enable='lt(t,{n})'[v]")
+    return ["-i", card["png"]], ["-filter_complex", graph, "-map", "[v]"]
 
 
 def render(plan, segs, final_mp4, workers=3):
