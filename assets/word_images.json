@@ -1,0 +1,18 @@
+{
+  "_about": "Words that always get an image in captions (scripts/apply_word_images.py). Each word maps to a list of images (links, or files under assets/); when a word appears more than once in a video, each use gets the next image in its list.",
+  "parry": [
+    "https://static.wikia.nocookie.net/phineasandferb/images/6/66/Profile_-_Perry_the_Platypus.PNG/revision/latest?cb=20200401182751",
+    "https://static.wikia.nocookie.net/phineasandferb/images/f/fb/Perry_official.jpg/revision/latest?cb=20140503030926",
+    "https://static.wikia.nocookie.net/phineasandferb/images/7/7e/Perry_the_platypus.png/revision/latest?cb=20091021193514",
+    "https://static.wikia.nocookie.net/phineasandferb/images/a/a1/Perry_spy_badge.png/revision/latest?cb=20130901051038",
+    "https://static.wikia.nocookie.net/phineasandferb/images/d/d3/Perry_flipping_fight_Doofenshmirtz.jpg/revision/latest?cb=20110221194220",
+    "https://static.wikia.nocookie.net/phineasandferb/images/0/03/Agent_P_saved_by_Santa.jpg/revision/latest?cb=20130901050019",
+    "https://static.wikia.nocookie.net/phineasandferb/images/4/45/Perry_watching_game.jpg/revision/latest?cb=20100531051114",
+    "https://static.wikia.nocookie.net/phineasandferb/images/4/4c/Perry_as_a_mindless_animal.jpg/revision/latest?cb=20201026221519",
+    "https://static.wikia.nocookie.net/phineasandferb/images/f/fc/Baby_Perry.JPG/revision/latest?cb=20150720231914",
+    "https://static.wikia.nocookie.net/phineasandferb/images/0/06/Agent-P-at-Epcot.jpg/revision/latest?cb=20120720125345"
+  ],
+  "parried": "parry",
+  "parrying": "parry",
+  "actually": ["assets/word_images/um_actually.png"]
+}
