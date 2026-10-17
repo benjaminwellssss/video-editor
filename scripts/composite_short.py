@@ -18,6 +18,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -123,7 +124,7 @@ def main():
     cards = json.load(open(captions, encoding="utf-8"))
     py = VENV_PY if os.path.exists(VENV_PY) else sys.executable
 
-    with tempfile.TemporaryDirectory(prefix="composite_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="composite_", ignore_cleanup_errors=True) as tmp:
         base = clip
         step(1, "zoom")
         if "--no-zoom" not in args:
@@ -166,7 +167,7 @@ def main():
         if sidecar.get("trims"):
             run([sys.executable, os.path.join(HERE, "apply_trims.py"), composed, sidecar_path, out + ".tmp.mp4"])
         else:
-            os.replace(composed, out + ".tmp.mp4")
+            shutil.move(composed, out + ".tmp.mp4")  # temp dir is on C:, clips on E:
         os.replace(out + ".tmp.mp4", out)
 
     frames = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
