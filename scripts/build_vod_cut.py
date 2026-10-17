@@ -32,6 +32,8 @@ import sys
 import concurrent.futures as cf
 from pathlib import Path
 
+from protected_names import is_cut
+
 FLAG_RE = re.compile(r"^(shit\w*|bullshit|ass|asses|bitch\w*|damn\w*|hell|pussy|tits?|crap|bastard\w*|dick\w*|piss\w*)$", re.I)
 SLUR_RE = re.compile(r"^(retard\w*|fag\w*|nigg\w*|chink\w*|spic\w*|kike\w*|tranny\w*)$", re.I)
 DEFAULT_EXCISE = [r"^f+u+c+k\w*$", r"^f\*+k\w*$"]
@@ -75,7 +77,7 @@ def tighten(plan, words):
             prev = w
         pieces.append((cur_s, min(b + 0.3, prev["end"] + tail)))
         # excise flagged words from every piece
-        cuts = [(w["start"] - 0.03, w["end"] + 0.03, w) for w in ws if any(p.match(clean(w["word"])) for p in excise)]
+        cuts = [(w["start"] - 0.03, w["end"] + 0.03, w) for w in ws if is_cut(w) or any(p.match(clean(w["word"])) for p in excise)]
         out = []
         for ps, pe in pieces:
             spans = [(ps, pe)]
@@ -111,7 +113,7 @@ def remap_words(segs, words, excise_pats):
         lo = bisect.bisect_left(starts, sg["start"])
         hi = bisect.bisect_left(starts, sg["end"])
         for w in words[lo:hi]:
-            if any(p.match(clean(w["word"])) for p in excise_pats):
+            if is_cut(w) or any(p.match(clean(w["word"])) for p in excise_pats):
                 continue
             ts = sg["rec"] + (w["start"] - sg["start"])
             te = sg["rec"] + (min(w["end"], sg["end"]) - sg["start"])

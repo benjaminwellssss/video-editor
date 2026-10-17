@@ -11,6 +11,8 @@ os.environ.setdefault("PYTHONUTF8", "1")
 import torch
 import whisperx
 
+from protected_names import scrub
+
 def main():
     media_path = sys.argv[1]
     out_path = sys.argv[2]
@@ -38,6 +40,7 @@ def main():
     align_model, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
     result = whisperx.align(result["segments"], align_model, metadata, audio, device, return_char_alignments=False)
 
+    print("protected names blanked:", scrub(result))
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 

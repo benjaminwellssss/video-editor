@@ -16,6 +16,8 @@ os.environ.setdefault("PYTHONUTF8", "1")
 import torch
 import whisperx
 
+from protected_names import scrub
+
 SR = 16000
 OVERLAP = 5.0
 
@@ -25,6 +27,7 @@ def merge(chunk_dir, out_path):
     for f in sorted(glob.glob(os.path.join(chunk_dir, "chunk_*.json"))):
         words.extend(json.load(open(f, encoding="utf-8")))
     words.sort(key=lambda w: w["start"])
+    scrub(words)
     json.dump({"segments": [{"words": words}]}, open(out_path, "w", encoding="utf-8"))
     return len(words)
 
@@ -64,6 +67,7 @@ def main():
                 if keep_lo <= st < keep_hi:
                     words.append({"word": w["word"], "start": round(st, 3), "end": round(w["end"] + lo, 3),
                                   "score": w.get("score")})
+        scrub(words)
         json.dump(words, open(cf, "w", encoding="utf-8"))
         cnt = merge(chunk_dir, out_path + ".partial.json")
         print(f"chunk {k + 1}/{n} done ({len(words)} words, {cnt} total)", flush=True)

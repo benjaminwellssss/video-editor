@@ -9,6 +9,8 @@ import json
 import re
 import sys
 
+from protected_names import MARK, is_protected
+
 SHORTS_DIR = r"E:\video-editor-projects\valheimin-ep1-longplay-vod\shorts"
 LEAD_S = 0.0  # cards start on the word itself: a 0.12s head start read as "popping up too early" (user, 2026-10-09)
 
@@ -25,6 +27,8 @@ EMOJI_SUBS = {
 
 
 def clean_word(w):
+    if MARK in w or is_protected(w):
+        return MARK
     cleaned = re.sub(r"[^A-Za-z0-9'\-]", "", w).upper()
     if cleaned in EMOJI_SUBS:
         return EMOJI_SUBS[cleaned]

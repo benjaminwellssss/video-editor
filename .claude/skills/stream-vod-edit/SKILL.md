@@ -1393,6 +1393,24 @@ Three tiers, applied to both the full-VOD cleanup and the highlight edit:
    limitations above).
 2. **Excise just the word**: "fuck" and its variants. Cut the exact
    word-length frame range out of the timeline.
+
+   **Family names (always, every deliverable, no exceptions).** The user's
+   children's names, nicknames and surname are excised from audio and never
+   shown in captions, SRTs, titles or metadata. Unlike curses, this applies to
+   shorts too: they are never "left for the user to censor later". The patterns
+   live in the git-ignored `assets/protected_names.json`. Never copy a name into
+   a tracked file, commit message, README or skill. `scripts/protected_names.py`
+   does the work:
+   - the transcribe scripts blank them to 🤐 in words.json;
+   - `build_vod_cut.py` excises them even when a plan overrides `excise`;
+   - `prep_shorts_batch.py` carves them out of shorts;
+   - `clean_word` shows 🤐.
+
+   For a transcript made before 2026-10-17, run
+   `python scripts/protected_names.py <words.json>` first (`--check` only
+   reports). Any other path that reads words directly must go through
+   `is_cut()` / `scrub()`. If `assets/protected_names.json` is missing, stop
+   and ask; don't build without it.
 3. **Leave alone**: "shit", "ass", and other general profanity. Don't touch
    the audio or cut anything — only the caption substitution above applies
    to these in shorts/captioned deliverables.

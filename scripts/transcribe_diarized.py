@@ -18,6 +18,8 @@ os.environ.setdefault("PYTHONUTF8", "1")
 
 import torch
 import whisperx
+
+from protected_names import scrub
 from whisperx.diarize import DiarizationPipeline, assign_word_speakers
 
 
@@ -65,6 +67,7 @@ def main():
     diarize_segments = diarize_model(audio, **diarize_kwargs)
     result = assign_word_speakers(diarize_segments, result)
 
+    print("protected names blanked:", scrub(result))
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 

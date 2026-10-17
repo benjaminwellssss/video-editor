@@ -28,6 +28,8 @@ import re
 import subprocess
 import sys
 
+from protected_names import carve
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLAGGED = []
 GAP, LEAD, TAIL = 2.0, 0.30, 0.40
@@ -61,6 +63,7 @@ def plan_segments(words, ranges, name):
         runs.append([cur, prev["end"]])
         for s, e in runs:
             segs.append([round(s - LEAD, 3), round(e + TAIL, 3)])
+    segs = carve(segs, words)
     # Flagged words are kept in the clip (the user censors them later); just report them.
     for w in words:
         t = clean(w["word"])

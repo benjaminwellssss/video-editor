@@ -49,7 +49,9 @@ This is the whole stream, tidied up, not a highlight reel.
   kept on each side.
 - **Censoring:** scenes with a named slur or a racial topic are cut. The word
   "fuck" is excised frame by frame, never muted. Other profanity is flagged
-  only.
+  only. Private names (family) are blanked at transcription and excised
+  everywhere, by `scripts/protected_names.py`. Its pattern list,
+  `assets/protected_names.json`, is git-ignored, so you make your own locally.
 - **Timeline:** rebuilt as trimmable clips with `resolve_build_timeline.py`,
   or with the MCP's `create_timeline_from_clips`.
 
