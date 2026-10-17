@@ -330,7 +330,7 @@ def fx_from_note(note):
     m = URL_RE.search(note)
     local = None if m else LOCAL_IMG_RE.search(note)
     if m or local:
-        fx["image_url"] = m.group(0).rstrip(").,”’") if m else local_image_path(local)
+        fx["image_url"] = m.group(0).rstrip(").,;”’") if m else local_image_path(local)  # ";" = Cabtions' "; " note join
         low = _text(note).lower()
         # default: the image stays on screen for exactly as long as the caption
         # card it's attached to (not a fixed guess) - images lingering well past
@@ -414,4 +414,5 @@ if __name__ == "__main__":  # self-check: python scripts/caption_fx.py
     assert fx_from_note("red, violent growing shake")["shake_px"] == 20.0
     fx = fx_from_note("gold sheen (word rule)")
     assert fx == {"sheen": COLOR_WORDS["gold"]}, fx
+    assert fx_from_note("https://x.com/a.gif; shake")["image_url"] == "https://x.com/a.gif"
     print("caption_fx ok")

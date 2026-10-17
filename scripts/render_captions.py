@@ -344,14 +344,17 @@ def active_word_index(card, t):
 
 def apply_sheen(img, color, t):
     """A shiny metallic gradient in `color` over a line drawn with a white fill: light top, darker band under the
-    middle, and a bright glint sweeping across about every 2 s. Multiplying keeps the black outline black."""
+    middle, and a bright glint line at the line's top-right -> bottom-left corner angle that sweeps across the
+    whole line (top-left to bottom-right) about every 1.9 s. Multiplying keeps the black outline black."""
     a = np.asarray(img, dtype=np.float32).copy()
     h, w = a.shape[:2]
     y = np.linspace(0.0, 1.0, h)[:, None]
     x = np.linspace(0.0, 1.0, w)[None, :]
     c = np.array(color[:3], dtype=np.float32)
     light = np.interp(y, [0, .45, .58, 1], [.6, .05, -.35, .15])
-    glint = 0.8 * np.exp(-(((x + 0.35 * y) - ((t * 0.7) % 1.5 - 0.2)) / 0.07) ** 2)
+    # x + y = p keeps the corner-to-corner angle at any p; p runs -0.3 -> 2.7, so it enters and leaves fully off the line
+    p = (t * 1.6) % 3.0 - 0.3
+    glint = 0.8 * np.exp(-((x + y - p) / 0.09) ** 2)
     k = np.clip(light + glint, -1, 1)[..., None]
     grad = np.where(k >= 0, c + (255 - c) * k, c * (1 + k))
     a[..., :3] *= grad / 255.0
