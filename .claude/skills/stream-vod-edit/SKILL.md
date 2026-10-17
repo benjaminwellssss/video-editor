@@ -1581,3 +1581,23 @@ here — this section covers everything else.
   the destination folder itself has moved before assuming anything else is
   wrong, then just re-target the new path — don't recreate the old
   structure.
+
+## Finishing a short: composite_short.py (2026-10-17)
+
+`python scripts/composite_short.py <clip_dir>` is the standard finish for a 9:16 short. It writes
+`<clip>_captioned.mp4` next to the clip, replacing any older one:
+
+1. `auto_zoom.py` zooms the facecam panel in on laughs, following the face, before any overlay goes on. Only the
+   facecam panel zooms, and only inward, so it never covers more of the gameplay. A laugh is loud, bursty audio
+   with no transcribed words, confirmed by head movement; loud talking and still faces get nothing or a tiny bump.
+   `--no-zoom` skips it; `--punches 3.2,10.5` adds laugh zooms by hand.
+2. Fetches image/GIF links from the caption notes that aren't cached yet.
+3. Renders **phrase captions** (`render_captions.py --phrases`): one-word cards grouped by speaker into short
+   two-line phrases, white text with the spoken word lit in the speaker's colour, single words bigger.
+   `--words` keeps the old one-word look.
+4. Renders the "who's talking" layer unless the speakers sidecar has `"voice_overlay": false`.
+5. Places the handle pop-up in the free slot nearest 70% of the way through, clear of every caption image.
+6. Cuts any sidecar `trims` last.
+
+`scripts/yt_stats.py` pulls per-video numbers (views, engaged-view share, average % viewed, subscribers per 1,000
+views) for the weekly review. It needs the channel owner's own OAuth client file; see the script's header.

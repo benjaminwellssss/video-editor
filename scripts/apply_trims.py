@@ -34,7 +34,7 @@ def main():
                     "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out], check=True)
     before, after = duration(src), duration(out)
-    removed = sum(b - a for a, b in trims)
+    removed = sum(max(0.0, min(b, before) - max(a, 0.0)) for a, b in trims)  # a trim can run past the end
     print(f"trimmed {len(trims)} stretch(es), {removed:.2f}s: {before:.2f}s -> {after:.2f}s")
     assert abs((before - removed) - after) < 0.15, "output length doesn't match the trims - check the result"
 

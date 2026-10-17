@@ -1,6 +1,9 @@
 """Render animated pop-in captions (up to 2 lines x 2 words) as a transparent overlay video.
 
-Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov> [--voices-only]
+Usage: <venv-python> render_captions.py <cards.json> <duration_s> <out.mov> [--voices-only] [--phrases]
+
+--phrases (or "caption_style": "phrases" in the speakers sidecar) groups the one-word cards into short
+two-line phrases with the spoken word lit in the speaker's colour - see build_phrase_lanes.
 
 --voices-only renders just the "who's talking" overlay (speaker pills, lighting up while they talk) as its
 own transparent layer, to composite last when the speakers sidecar has "voice_overlay": true.
@@ -260,7 +263,7 @@ def render_word_image(word, style, fill):
     return canvas, left_ox, top_oy, content_w, content_h
 
 
-def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None):
+def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None, active_fill=None):
     """One caption line built word-by-word so the currently-spoken word (at
     `active_idx`, or None) can be colored separately from the rest. `style`
     picks font size/stroke/base-color — PRIMARY_STYLE (white) or
@@ -272,7 +275,7 @@ def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None
     base_fill = tuple(fill_override) if fill_override is not None else style["base_fill"]
     pieces = []
     for wi, word in enumerate(words):
-        fill = HIGHLIGHT_GREEN if wi == active_idx else base_fill
+        fill = (tuple(active_fill) if active_fill else HIGHLIGHT_GREEN) if wi == active_idx else base_fill
         pieces.append(render_word_image(word, style, fill))
 
     total_w = sum(p[3] for p in pieces) + word_gap * (len(pieces) - 1)
@@ -351,11 +354,15 @@ def compose_card(card, t, style, cache):
     single-word cards, where there's no highlight-vs-rest distinction to
     preserve (green=Ben, yellow/red/blue=others, assigned by build_speaker_colors.py)."""
     fill_override = card.get("fill")
+    active_fill = None
+    if card.get("_karaoke"):  # phrase captions: white words, the spoken one lit in the speaker's colour
+        active_fill, fill_override = fill_override or HIGHLIGHT_GREEN, None
 
     def get_line_image(words, active_idx):
-        key = (style["font"].path, style["font"].size, tuple(words), active_idx, tuple(fill_override) if fill_override else None)
+        key = (style["font"].path, style["font"].size, tuple(words), active_idx,
+               tuple(fill_override) if fill_override else None, tuple(active_fill) if active_fill else None)
         if key not in cache:
-            cache[key] = render_line_image(words, active_idx, style, fill_override)
+            cache[key] = render_line_image(words, active_idx, style, fill_override, active_fill)
         return cache[key]
 
     active_global = active_word_index(card, t)
@@ -511,8 +518,12 @@ def load_cached_image(url, cache_dir):
     not-yet-cached URL just gets reported and skipped rather than blocking
     the render."""
     h = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
-    local = url if os.path.isabs(url) else os.path.join(os.path.dirname(FONTS_DIR), "..", url)  # assets/... -> repo
-    candidates = [local] if not url.startswith("http") else [os.path.join(cache_dir, h + e) for e in (".gif", ".webp", ".png", ".jpg", ".jpeg")]
+    if url.startswith("http"):
+        candidates = [os.path.join(cache_dir, h + e) for e in (".gif", ".webp", ".png", ".jpg", ".jpeg")]
+    elif os.path.isabs(url) or url.startswith("\\\\"):
+        candidates = [url]
+    else:  # relative: the clip's own folder first, then the repo (assets/... word-image rules)
+        candidates = [os.path.join(os.path.dirname(cache_dir), url), os.path.join(os.path.dirname(FONTS_DIR), "..", url)]
     for p in candidates:
         if os.path.exists(p):
             im = Image.open(p)
@@ -523,6 +534,9 @@ def load_cached_image(url, cache_dir):
                 frames.append(im.convert("RGBA").copy())
                 durations.append(max(im.info.get("duration", 100), 20))
             return frames, durations
+    if not url.startswith("http"):
+        print(f'  image overlay: local file not found: {url}')
+        return None, None
     print(f'  image overlay requested but not fetched yet: {url}')
     print(f'    -> save it as {os.path.join(cache_dir, h + ".gif")} (or .png/.jpg/.webp) and re-render to include it')
     return None, None
@@ -536,6 +550,66 @@ def composite_clipped(frame, img, x, y):
     if fx1 <= fx0 or fy1 <= fy0:
         return
     frame.alpha_composite(img.crop((fx0 - x, fy0 - y, fx1 - x, fy1 - y)), (fx0, fy0))
+
+
+# ---- phrase captions (Burnt Peanut style) ----
+# Cards stay one word each for editing; at render time consecutive words by the same speaker are grouped into
+# short phrases (split at pauses), up to two lines, with the spoken word lit in the speaker's colour. One-word
+# phrases draw big, longer ones smaller. A word with a text-effect note, or a card the editor typed several
+# words into, keeps its own card. Notes and images are processed per word before grouping, so image timing
+# and effects work exactly as with one-word captions.
+PHRASE_GAP_S = 0.45      # a pause longer than this starts a new phrase
+PHRASE_MAX_WORDS = 4
+PHRASE_MAX_CHARS = 20
+PHRASE_SCALE = {1: 1.3, 2: 1.05}  # by word count; 3+ words use PHRASE_SCALE_LONG
+PHRASE_SCALE_LONG = 0.86
+IMAGE_FX = {"image_url", "image_duration", "image_position", "image_start_word", "image_stop", "pairable"}
+
+
+def build_phrase_lanes(lanes):
+    out_lanes = []
+    for cards in lanes:
+        out, cur = [], []
+
+        def flush():
+            if not cur:
+                return
+            words = [{"text": " ".join(c["lines"]).strip(), "start": c["start"], "end": c["end"]} for c in cur]
+            n = len(words)
+            top_n = n if n <= 2 else (n + 1) // 2
+            for i, w in enumerate(words):
+                w["line"] = 0 if i < top_n else 1
+            first = cur[0]
+            card = {
+                "start": first["start"], "end": cur[-1]["end"], "words": words,
+                "lines": [" ".join(w["text"] for w in words[:top_n])] + ([" ".join(w["text"] for w in words[top_n:])] if n > top_n else []),
+                "speaker": first.get("speaker"), "_karaoke": True,
+                "emphasis_scale": PHRASE_SCALE.get(n, PHRASE_SCALE_LONG) * first.get("emphasis_scale", 1.0),
+                "_fx": {k: v for k, v in first.get("_fx", {}).items() if k not in IMAGE_FX} if n == 1 else {},
+            }
+            for k in ("fill", "_anchor_y", "_font", "lane"):
+                if k in first:
+                    card[k] = first[k]
+            out.append(card)
+            cur.clear()
+
+        for c in cards:
+            text = " ".join(c.get("lines", [])).strip()
+            if not text:
+                continue  # note-only cards draw nothing (their images were gathered already)
+            own = bool({k for k in c.get("_fx", {}) if k not in IMAGE_FX} - {"color"}) or len(text.split()) > 1
+            if cur and (own or c.get("speaker") != cur[-1].get("speaker")
+                        or c["start"] - cur[-1]["end"] > PHRASE_GAP_S
+                        or len(cur) >= PHRASE_MAX_WORDS
+                        or len(" ".join(" ".join(x["lines"]) for x in cur)) + 1 + len(text) > PHRASE_MAX_CHARS
+                        or bool({k for k in cur[-1].get("_fx", {}) if k not in IMAGE_FX} - {"color"})):
+                flush()
+            cur.append(c)
+            if own:
+                flush()
+        flush()
+        out_lanes.append(out)
+    return out_lanes
 
 
 def split_lanes(raw):
@@ -579,6 +653,8 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
         dx, dy, angle = fx_shake(fx, t)
         dy += fx_dance(fx, t, card)
     block, top_center_y, bottom_edge_y = compose_card(card, t, style, cache)
+    if block.width * scale > W - 60:
+        scale = (W - 60) / block.width
     nw = max(1, int(block.width * scale))
     nh = max(1, int(block.height * scale))
     resized = block.resize((nw, nh), Image.LANCZOS)
@@ -798,8 +874,9 @@ def gather_image_overlays(lanes, cards_path, duration_s):
             if (prev and prev["url"] == url and prev["position"] == fx["image_position"]
                     and 0 <= start - prev["end"] < 0.05):
                 # the same image on back-to-back cards (a phrase) plays as one overlay,
-                # instead of restarting the GIF on every word
+                # instead of restarting the GIF on every word - and a phrase is never a start/end marker
                 prev["end"] = max(prev["end"], end)
+                prev["pairable"] = False
                 continue
             overlays.append({
                 "start": start, "end": end, "frames": frames, "durations": durations,
@@ -812,8 +889,8 @@ def gather_image_overlays(lanes, cards_path, duration_s):
 
 def pair_image_spans(overlays):
     """The same link pasted on a start caption and an end caption shows the image the whole way between:
-    plain uses of one link pair up in time order (1st with 2nd, 3rd with 4th...). Back-to-back uses were
-    already merged into one overlay above."""
+    single-caption uses of one link pair up in time order (1st with 2nd, 3rd with 4th...). A link on a
+    whole phrase (back-to-back captions, merged above) stays with that phrase and never pairs."""
     out, open_by_url = [], {}
     for ov in sorted(overlays, key=lambda o: o["start"]):
         key = (ov["url"], str(ov["position"]))
@@ -961,6 +1038,7 @@ def draw_voice_overlay(frame, voices, talking):
 def main():
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
     voices_only = "--voices-only" in sys.argv[4:]  # render just the "who's talking" layer
+    phrases = "--phrases" in sys.argv[4:] or load_sidecar(cards_path).get("caption_style") == "phrases"
     font_choice = find_font_choice(cards_path)
     apply_font_choice(font_choice)
     print(f"  font: {font_choice}")
@@ -976,6 +1054,9 @@ def main():
     if len(lanes) > 1:
         print(f"  {len(lanes)} simultaneous lanes: " + ", ".join(str(len(c)) for c in lanes) + " cards")
     image_overlays = [] if voices_only else gather_image_overlays(lanes, cards_path, duration_s)
+    if phrases:
+        lanes = build_phrase_lanes(lanes)
+        print("  caption style: phrases (" + ", ".join(str(len(c)) for c in lanes) + " phrase cards)")
     total_frames = int(round(duration_s * FPS))
 
     cache = {}

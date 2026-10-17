@@ -101,8 +101,28 @@ MAX_SCALE = 1.9
 RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasingly", "increasing"}
 
 URL_RE = re.compile(r"https?://\S+")
-# a local image instead of a link: an absolute path or one under the repo's assets/ (e.g. word-image rules)
-LOCAL_IMG_RE = re.compile(r"(?:[A-Za-z]:[\\/]|assets[\\/])\S+?\.(?:png|gif|jpe?g|webp)\b", re.I)
+# a local image instead of a link, any of:
+#   "C:\any folder\pic.gif"   quoted (Explorer's "Copy as path"), spaces fine
+#   E:\Streaming\Overlays + Images\pic.gif   unquoted full path, spaces fine (ends at the extension)
+#   \\machine\share\pic.png   network path;   file:///E:/pics/pic%20one.png   file link
+#   falling.gif / images\falling.gif / assets/word_images/x.png   relative, no spaces: looked up in the clip's own
+#   folder, then the repo (word-image rules)
+IMG_EXT = r"\.(?:png|gif|jpe?g|webp|bmp)"
+LOCAL_IMG_RE = re.compile(
+    r'["“\']((?:file:/*)?[^"“”\'\r\n]+?' + IMG_EXT + r')["”\']'
+    r"|(?:file:/*(?:[A-Za-z]:[\\/]|[^\s/\\\"]+[\\/])|(?<![A-Za-z])[A-Za-z]:[\\/]|\\\\)[^\"“”<>|\r\n]*?" + IMG_EXT + r"\b"
+    r"|(?<![\w/\\.:%-])[\w\-\\/.]*[\w-]" + IMG_EXT + r"\b", re.I)
+
+
+def local_image_path(m):
+    """The path a LOCAL_IMG_RE match names: quotes dropped, file: links turned into a plain path."""
+    path = (m.group(1) or m.group(0)).strip()
+    if path.lower().startswith("file:"):
+        from urllib.parse import unquote
+        path = unquote(re.sub(r"^file:/*", "", path, flags=re.I))
+        if not re.match(r"[A-Za-z]:", path):
+            path = "\\\\" + path  # file://machine/share/x.png
+    return path
 
 # Absolute on-screen anchor for a note-driven image overlay - checked longest
 # (most specific) phrase first so "top left" doesn't get shadowed by a bare
@@ -282,9 +302,10 @@ def fx_from_note(note):
     if color_hit:
         fx["color"] = COLOR_WORDS[sorted(color_hit)[0]]
 
-    m = URL_RE.search(note) or LOCAL_IMG_RE.search(note)
-    if m:
-        fx["image_url"] = m.group(0).rstrip(").,”’")
+    m = URL_RE.search(note)
+    local = None if m else LOCAL_IMG_RE.search(note)
+    if m or local:
+        fx["image_url"] = m.group(0).rstrip(").,”’") if m else local_image_path(local)
         low = _text(note).lower()
         # default: the image stays on screen for exactly as long as the caption
         # card it's attached to (not a fixed guess) - images lingering well past
