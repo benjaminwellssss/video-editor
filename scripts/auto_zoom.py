@@ -1,6 +1,7 @@
 """Dynamic camera for a finished 9:16 short: zooms in on the facecam when people laugh, following the face.
 
 Usage: python auto_zoom.py <clip.mp4> <out.mp4> [--captions captions.json] [--punches 3.2,10.5] [--no-drift] [--dry]
+                           [--frame 1920x1080 --zoom-scale 3] [--voice my_mic.wav]
 
 Run it on the clip BEFORE the captions, voice overlay and handle pop-up go on. Needs OpenCV (cv2). No AI: it
 reads the clip's own audio and caption timings; the face is found with OpenCV's small YuNet model
@@ -18,6 +19,12 @@ reads the clip's own audio and caption timings; the face is found with OpenCV's 
   bump, and only the biggest of them.
 - --punches adds laugh-sized zooms by hand (seconds). --no-drift turns off the slow push in and out.
 - --dry prints what it found without rendering.
+- --voice <audio>: zoom on the streamer's own voice instead of laughs. <audio> is their mic track cut to the
+  clip's timeline. It punches in while that voice is above VOICE_FLOOR_DB (breathing and mic hiss stay under it),
+  holds through pauses shorter than VOICE_GAP_S and releases slowly; friends and game audio never trigger it.
+- --frame WxH: a 16:9 (or any) video instead of the 9:16 layout. The whole frame zooms, towards the face (e.g. a
+  long-form's cold open punching in on the facecam box); --zoom-scale multiplies every zoom amount, since a
+  small facecam in a full frame needs a much bigger punch than the shorts' facecam panel.
 """
 import json
 import os
@@ -28,6 +35,8 @@ import numpy as np
 
 W, H, FPS = 1080, 1920, 30
 PANEL_H = 612                # facecam panel height in the 9:16 layout (the seam measures 612-616 on every 10-14 clip)
+DET_SCALE = 2                # face detection runs at 1/DET_SCALE size (full size with --frame: the facecam is small)
+ZOOM_SCALE = 1.0
 SR = 16000
 HOP_S = 0.02
 WORD_PAD_S = 0.12            # sound this close to a transcribed word counts as talking
@@ -50,6 +59,8 @@ SPIKES_PER_S = 1 / 15        # at most one bump per 15 s of clip
 MIN_GAP_S = 2.5
 
 DRIFT_AMP, DRIFT_PERIOD_S = 0.04, 10.0
+VOICE_FLOOR_DB = -30.0       # --voice: mic level that counts as talking (10-14 speech -15..-22, breathing -50..-70)
+VOICE_MIN_S, VOICE_GAP_S, VOICE_RELEASE_S = 0.35, 1.5, 1.5   # ignore blips, ride through pauses, slow zoom-out
 FACE_EVERY_S, FACE_SMOOTH_S = 0.1, 1.2
 FACE_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "models", "face_detection_yunet_2023mar.onnx")
 
@@ -132,6 +143,25 @@ def confirm_laughs(laughs, faces):
     return out
 
 
+def voice_zooms(db):
+    """(start, end, zoom) for each stretch of the streamer talking, from their own mic's loudness."""
+    on = np.concatenate([[False], db > VOICE_FLOOR_DB, [False]])
+    edges = np.flatnonzero(np.diff(on.astype(int)))
+    runs = []
+    for a, b in zip(edges[::2] * HOP_S, edges[1::2] * HOP_S):
+        if runs and a - runs[-1][1] < VOICE_GAP_S:
+            runs[-1][1] = b
+        else:
+            runs.append([a, b])
+    out = []
+    for a, b in runs:
+        if b - a < VOICE_MIN_S:
+            continue
+        peak = db[int(a / HOP_S):int(b / HOP_S) + 1].max()
+        out.append((a, b, LAUGH_ZOOM[0] + (LAUGH_ZOOM[1] - LAUGH_ZOOM[0]) * float(np.clip((peak - VOICE_FLOOR_DB) / 15, 0, 1))))
+    return out
+
+
 def find_spikes(db, laughs):
     """[(time_s, strength)] for the biggest sudden jumps that aren't part of a laugh."""
     k = int(SPIKE_CONTEXT_S / HOP_S)
@@ -166,7 +196,7 @@ def zoom_curve(n_frames, laughs, spikes, drift):
         z = np.maximum(z, amt * np.where(t < t0 + SPIKE_IN_S, up, down ** 2) * (t >= t0))
     if drift:
         z += DRIFT_AMP * (1 - np.cos(2 * np.pi * t / DRIFT_PERIOD_S)) / 2
-    return 1 + z
+    return 1 + z * ZOOM_SCALE
 
 
 def find_faces(path, n_frames):
@@ -174,7 +204,7 @@ def find_faces(path, n_frames):
     import cv2
     if not os.path.exists(FACE_MODEL):
         sys.exit(f"auto_zoom: face model missing: {FACE_MODEL}")
-    det = cv2.FaceDetectorYN.create(FACE_MODEL, "", (W // 2, PANEL_H // 2), 0.7)
+    det = cv2.FaceDetectorYN.create(FACE_MODEL, "", (W // DET_SCALE, PANEL_H // DET_SCALE), 0.7)
     step = max(1, int(round(FACE_EVERY_S * FPS)))
     cap = cv2.VideoCapture(path)
     faces = {}
@@ -184,11 +214,15 @@ def find_faces(path, n_frames):
         if fi % step:
             continue
         _, frame = cap.retrieve()
-        _, found = det.detect(cv2.resize(frame[:PANEL_H], (W // 2, PANEL_H // 2)))
+        _, found = det.detect(cv2.resize(frame[:PANEL_H], (W // DET_SCALE, PANEL_H // DET_SCALE)))
         if found is not None:
-            x, y, w, h = max(found, key=lambda f: f[2] * f[3])[:4] * 2
+            x, y, w, h = max(found, key=lambda f: f[2] * f[3])[:4] * DET_SCALE
             faces[fi / FPS] = (float(x + w / 2), float(y + h / 2), float(w))
     cap.release()
+    # drop stray hits (a face in the gameplay): keep detections within 2 face widths of the usual spot
+    if faces:
+        cx, cy, fw = np.median(np.array(list(faces.values())), 0)
+        faces = {t: f for t, f in faces.items() if abs(f[0] - cx) < 2 * fw and abs(f[1] - cy) < 2 * fw}
     return faces
 
 
@@ -244,7 +278,13 @@ def render(src, out, zooms, track):
 
 
 def main():
+    global W, H, PANEL_H, DET_SCALE, ZOOM_SCALE, HOLD_MAX_S, LAUGH_OUT_S
     args = sys.argv[1:]
+    if "--frame" in args:
+        W, H = map(int, args[args.index("--frame") + 1].lower().split("x"))
+        PANEL_H, DET_SCALE = H, 1
+    if "--zoom-scale" in args:
+        ZOOM_SCALE = float(args[args.index("--zoom-scale") + 1])
     src, out = args[0], args[1]
     cap_path = args[args.index("--captions") + 1] if "--captions" in args else os.path.join(os.path.dirname(os.path.abspath(src)), "captions.json")
     captions = json.load(open(cap_path, encoding="utf-8")) if os.path.exists(cap_path) else []
@@ -267,6 +307,10 @@ def main():
     print(f"{len(laughs)} laugh zooms, {len(spikes)} small bumps: " + ", ".join(f"{t:.1f}s" for t, _ in spikes), flush=True)
     if not captions:
         print("  (no captions.json found: talking can't be told from laughing, so laugh detection is rough)", flush=True)
+    if "--voice" in args:
+        laughs, spikes = voice_zooms(loudness(args[args.index("--voice") + 1])), []
+        HOLD_MAX_S, LAUGH_OUT_S = 1e9, VOICE_RELEASE_S
+        print("voice zooms: " + ", ".join(f"{a:.1f}-{b:.1f}s +{z:.0%}" for a, b, z in laughs), flush=True)
     if "--dry" in args:
         return
     render(src, out, zoom_curve(n, laughs, spikes, "--no-drift" not in args), face_track(faces, n))
@@ -284,5 +328,11 @@ if __name__ == "__main__":
     still = {t / 10: (500.0, 300.0, 150.0) for t in range(100)}
     moving = {t / 10: (500.0 + (t % 2) * 6, 300.0, 150.0) for t in range(100)}
     assert confirm_laughs([(2.0, 4.0, 0.5)], still) == [] and len(confirm_laughs([(2.0, 4.0, 0.5)], moving)) == 1
+    v = np.full(500, -70.0)
+    v[100:150] = -18.0      # 1 s of talking
+    v[175:200] = -20.0      # more after a 0.5 s pause: same zoom
+    v[300:310] = -18.0      # 0.2 s blip: ignored
+    v[400:450] = -45.0      # breathing: under the floor
+    assert [(round(a, 2), round(b, 2)) for a, b, _ in voice_zooms(v)] == [(2.0, 4.0)], voice_zooms(v)
     assert crop_box(1.25, 0, 0)[:2] == (0, 0) and crop_box(1.25, W, PANEL_H)[0] == W - W / 1.25  # stays in the panel
     main()
