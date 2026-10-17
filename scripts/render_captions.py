@@ -42,7 +42,7 @@ from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note
 
 W, H = 1080, 1920
 FPS = 30
-FONTS_DIR = r"C:\Users\Bem\Desktop\video-editor\assets\fonts"
+FONTS_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts"))
 # Caption font options - picked in the caption editor (saved to the job's
 # "*_speakers.json" sidecar as {"font": "<name>"}), auto-discovered here by
 # find_font_path(). "Bebas Neue" is the default when no sidecar/font is set.

@@ -116,9 +116,9 @@ RAMP_WORDS = {"progressively", "progressive", "gradually", "gradual", "increasin
 
 URL_RE = re.compile(r"https?://\S+")
 # a local image instead of a link, any of:
-#   "C:\any folder\pic.gif"   quoted (Explorer's "Copy as path"), spaces fine
-#   E:\Streaming\Overlays + Images\pic.gif   unquoted full path, spaces fine (ends at the extension)
-#   \\machine\share\pic.png   network path;   file:///E:/pics/pic%20one.png   file link
+#   "<drive>:\any folder\pic.gif"   quoted (Explorer's "Copy as path"), spaces fine
+#   <drive>:\<your folder>\pic.gif   unquoted full path, spaces fine (ends at the extension)
+#   \\<pc>\share\pic.png   network path;   file:///<drive>:/pics/pic%20one.png   file link
 #   falling.gif / images\falling.gif / assets/word_images/x.png   relative, no spaces: looked up in the clip's own
 #   folder, then the repo (word-image rules)
 IMG_EXT = r"\.(?:png|gif|jpe?g|webp|bmp)"
