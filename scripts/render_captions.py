@@ -38,11 +38,16 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
+from caption_fx import COLOR_WORDS, MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
 
 W, H = 1080, 1920
 FPS = 30
 FONTS_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts"))
+# Spoken color words -> a sheen on their caption line, applied here at render time so no build step can skip it.
+# A card with any note of its own is left alone (hand edits win; a note like "plain" switches it off).
+_WORD_RULES = os.path.join(FONTS_DIR, "..", "word_images.json")
+SHEEN_COLORS = {k: v for k, v in json.load(open(_WORD_RULES, encoding="utf-8")).get("_sheen_colors", {}).items()
+                if not k.startswith("_") and v in COLOR_WORDS}
 # Caption font options - picked in the caption editor (saved to the job's
 # "*_speakers.json" sidecar as {"font": "<name>"}), auto-discovered here by
 # find_font_path(). "Bebas Neue" is the default when no sidecar/font is set.
@@ -799,6 +804,9 @@ def apply_fx_passes(cards, lane_no):
     each note's final, resolved effect."""
     for card in cards:
         card["_fx"] = dict(card.get("fx") or fx_from_note(card.get("note")))
+        word = re.sub(r"[^a-z']", "", " ".join(card.get("lines", [])).lower())
+        if word in SHEEN_COLORS and not card.get("note") and not card.get("fx"):
+            card["_fx"]["sheen"] = COLOR_WORDS[SHEEN_COLORS[word]]
 
     for card in cards:
         parsed = parse_global_instruction(card.get("note"))
