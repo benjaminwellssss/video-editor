@@ -195,6 +195,22 @@ available without diarization**: track 2 = Ben, track 3 = everyone else on Disco
 speaker-colored captions and for `verify_caption_timing.py` (a clean voice reference). Alerts bleed into
 every track.
 
+### Game audio level rule (user, 2026-10-17)
+
+**The game track's typical peaks sit at 50% of the voices' typical peaks**, in every long-form and short.
+Measure, don't guess: OBS sometimes records the game far too quietly (the 10-14 VOD's game track sat
+about 38 dB under the voices and sounded like silence until boosted). Run
+
+```
+python scripts/level_game_audio.py <full-mix track> <game track> <game_leveled.m4a> --ratio 0.5 --start <first-audio s> [--mix <mix_leveled.m4a>]
+```
+
+It prints the gain it applied (10-14: +31.6 dB) and writes the boosted game track (for a Resolve game
+lane) and, with `--mix`, voices + game mixed (for an ffmpeg-built cut). "Typical peak" = mean of the
+loudest 10% of 0.1 s peaks, ignoring the top 0.05% so one blip doesn't set the level; a limiter catches
+the loudest hits. This supersedes the earlier "game/music track at 50% volume" shorts setting (a fixed
+−6 dB on a track whose own level varies by stream).
+
 The section below is the **older (2026-09) layout**, kept for recordings from before the routing changed.
 Its "track 3 is a near-duplicate of the full mix" no longer holds.
 
