@@ -664,6 +664,18 @@ def draw_card(frame, card, style, t, cache, primary, base_y=None):
     else:
         canvas_y = int(base_y + SECONDARY_GAP_FRAC * FONT_SIZE_SECONDARY * scale)
     paste_x, paste_y = cx - nw // 2, canvas_y
+    if fx.get("fade_in"):
+        a = min(1.0, u / 0.4)
+        if a < 1.0:
+            resized.putalpha(resized.getchannel("A").point(lambda v: int(v * a)))
+    if fx.get("lean"):
+        k = fx["lean"]
+        extra = int(k * nh)
+        # output (x, y) samples input (x + k*y - k*nh): the bottom row stays put, the top shifts right
+        resized = resized.transform((nw + extra, nh), Image.AFFINE, (1, k, -k * nh, 0, 1, 0), resample=Image.BICUBIC)
+        paste_x -= extra // 2
+    if fx.get("slide_px"):
+        dx -= int(fx["slide_px"] * (1 - min(1.0, u / 0.5)) ** 3)
     if angle:
         resized = resized.rotate(angle, resample=Image.BICUBIC, expand=True)
         paste_x -= (resized.width - nw) // 2
@@ -824,6 +836,14 @@ def apply_fx_passes(cards, lane_no):
         if card["_fx"].get("color"):
             card["_base_fill"] = card.get("fill")
             card["fill"] = list(card["_fx"]["color"])
+        if card["_fx"].get("card_font"):
+            key = card["_fx"]["card_font"].lower()
+            path = next((os.path.join(FONTS_DIR, f) for f in os.listdir(FONTS_DIR)
+                         if f.lower().startswith(key) and f.lower().endswith((".ttf", ".otf"))), None)
+            if path:
+                card["_font"] = path
+            else:
+                print(f'  font {card["_fx"]["card_font"]} NOT FOUND in {FONTS_DIR} - add the .ttf and re-render')
         if card.get("note"):
             pos = parse_text_position(card["note"])
             fx = card["_fx"]
@@ -919,7 +939,7 @@ def fit_image(img):
     return img
 
 
-def draw_image_overlay(frame, ov, t):
+def draw_image_overlay(frame, ov, t, caption_bottom=None):
     frames = ov["frames"]
     if len(frames) == 1:
         img = frames[0]
@@ -945,6 +965,9 @@ def draw_image_overlay(frame, ov, t):
         # relative to the caption bar
         ox = (W - img.width) // 2
         oy = BAR_CENTER_Y + 260 if pos == "below" else BAR_CENTER_Y - 260 - img.height
+    # captions on screen and the image reaches into them: move it down to sit just below the captions
+    if caption_bottom is not None and oy < caption_bottom + 20 and oy + img.height > BAR_CENTER_Y - 150:
+        oy = int(min(caption_bottom + 20, H - img.height - 20))
     composite_clipped(frame, img, ox, oy)
 
 
@@ -1076,10 +1099,6 @@ def main():
         # The highest timeline showing a caption right now draws big on the seam; any others showing at the
         # same moment stack smaller beneath it. (With one timeline per speaker, a lone caption from a lower
         # timeline still draws full size.)
-        for ov in image_overlays:  # images first, so captions always read on top of them
-            if ov["start"] <= t < ov["end"]:
-                draw_image_overlay(frame, ov, t)
-
         talking = set()
         bottom = None  # bottom edge of the last lane drawn; sub-lanes stack under it
         for li, cards in enumerate(lanes):
@@ -1094,6 +1113,10 @@ def main():
                 bottom = draw_card(frame, card, PRIMARY_STYLE, t, cache, primary=True)
             else:
                 bottom = draw_card(frame, card, SECONDARY_STYLE, t, cache, primary=False, base_y=bottom)
+
+        for ov in image_overlays:  # drawn after the captions so they know where the captions end
+            if ov["start"] <= t < ov["end"]:
+                draw_image_overlay(frame, ov, t, bottom)
 
         if voices_only:
             draw_voice_overlay(frame, voices, talking)

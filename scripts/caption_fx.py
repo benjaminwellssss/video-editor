@@ -15,6 +15,10 @@ Per-card effects (they apply to that card's caption only, never the video):
   dance / bounce / groove/wiggle - a smooth vertical bob (not jittery like shake)
   glow / shine / holy / neon / radiant / halo - a brief radiant flash behind the text
   echo / echoy           - the text drifts side to side with fading, expanding ghost copies
+  sly / italic / lean / sarcastic - italic-style lean (top tilted right)
+  slide / drift / sneak  - eases in sideways from the left
+  fade / whisper         - fades in over the first ~40% of the card (not on image notes)
+  medieval / fantasy     - MedievalSharp for this card only
   a fonts.google.com/specimen/<Font> link - that font (file must be in assets/fonts)
     for every card of the speaker(s) named in quotes; the note's last color word
     becomes their fill
@@ -75,6 +79,10 @@ ECHO = {"echo", "echoy", "echoey", "echoing", "echoes"}
 FONT_LINK_RE = re.compile(r"https?://fonts\.google\.com/specimen/([A-Za-z0-9+]+)\S*")
 MULTIPLY = {"multiply", "multiplying", "multiplies", "duplicate", "duplicating", "clone", "cloning"}
 GLOW = {"glow", "glowing", "holy", "shine", "shining", "radiant", "neon", "halo"}
+LEAN = {"sly", "sneaky", "smug", "italic", "italics", "slant", "slanted", "lean", "leaning", "sarcastic", "sarcasm"}
+SLIDE = {"slide", "sliding", "slides", "drift", "drifting", "creep", "creeping", "sneak", "sneaking"}
+FADE = {"fade", "fading", "fades", "whisper", "whispered", "ghostly"}
+FONT_WORDS = {"medieval": "MedievalSharp", "fantasy": "MedievalSharp", "olde": "MedievalSharp"}  # word -> assets/fonts file prefix
 
 COLOR_WORDS = {
     "red": (230, 40, 40, 255),
@@ -294,6 +302,15 @@ def fx_from_note(note):
         fx["echo"] = True  # drifting text with fading, expanding ghost copies
     if words & MULTIPLY:
         fx["multiply"] = True  # copies of the word spread across the screen over the card
+    if words & LEAN:
+        fx["lean"] = min(0.18 * factor, 0.4)  # italic-style shear, top leaning right
+    if words & SLIDE:
+        fx["slide_px"] = 90.0 * factor  # eases in sideways from the left over the first half
+    if words & FADE and not (URL_RE.search(note) or LOCAL_IMG_RE.search(note)):
+        fx["fade_in"] = True  # "slow fade in <image>" notes meant the image, not the text
+    font_hit = sorted(words & FONT_WORDS.keys())
+    if font_hit:
+        fx["card_font"] = FONT_WORDS[font_hit[0]]
     if not fx and "impact" in words:  # "impact" on its own = a fast punch-in
         fx["scale_to"] = min(1.0 + 0.35 * factor, MAX_SCALE)
         fx["scale_fast"] = True
@@ -351,6 +368,14 @@ def describe(note, fx):
         parts.append("echo")
     if fx.get("multiply"):
         parts.append("multiplying copies")
+    if fx.get("lean"):
+        parts.append(f'lean {fx["lean"]:.2f}')
+    if fx.get("slide_px"):
+        parts.append(f'slide in {fx["slide_px"]:.0f}px')
+    if fx.get("fade_in"):
+        parts.append("fade in")
+    if fx.get("card_font"):
+        parts.append(f'font {fx["card_font"]} (this card)')
     if fx.get("image_stop"):
         parts.append("stops the started image here")
     if "color" in fx:
@@ -368,3 +393,13 @@ def describe(note, fx):
         pos_str = " ".join(pos) if isinstance(pos, tuple) else pos
         parts.append(f'image overlay ({pos_str}, {dur}): {fx["image_url"]}')
     return ", ".join(parts) + f' <- "{note}"'
+
+
+if __name__ == "__main__":  # self-check: python scripts/caption_fx.py
+    fx = fx_from_note("SLY: lean, slow slide, purple")
+    assert fx["lean"] and fx["slide_px"] and fx["color"] == COLOR_WORDS["purple"], fx
+    assert fx_from_note("medieval font, white")["card_font"] == "MedievalSharp"
+    assert "fade_in" not in fx_from_note("slow fade in https://x.com/a.gif")
+    assert fx_from_note("whisper, fade in")["fade_in"]
+    assert fx_from_note("red, violent growing shake")["shake_px"] == 20.0
+    print("caption_fx ok")
