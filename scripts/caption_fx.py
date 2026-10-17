@@ -19,6 +19,9 @@ Per-card effects (they apply to that card's caption only, never the video):
   slide / drift / sneak  - eases in sideways from the left
   fade / whisper         - fades in over the first ~40% of the card (not on image notes)
   medieval / fantasy     - MedievalSharp for this card only
+  a color word + sheen / shiny / metallic - a shiny metallic gradient in that color (gold and
+    silver too) on the caption line this word lands in, instead of a flat fill; the
+    word-image rules add "<color> sheen" to spoken color words automatically
   a fonts.google.com/specimen/<Font> link - that font (file must be in assets/fonts)
     for every card of the speaker(s) named in quotes; the note's last color word
     becomes their fill
@@ -95,7 +98,10 @@ COLOR_WORDS = {
     "white": (255, 255, 255, 255),
     "black": (25, 25, 25, 255),
     "cyan": (70, 220, 220, 255),
+    "gold": (255, 190, 40, 255),
+    "silver": (200, 206, 216, 255),
 }
+SHEEN = {"sheen", "shiny", "metallic", "shimmer", "gradient"}  # with a color word: metallic gradient instead of a flat fill
 
 INTENSITY = {
     "gentle": 0.5, "gently": 0.5, "slight": 0.5, "slightly": 0.5, "subtle": 0.5, "soft": 0.5, "light": 0.5, "little": 0.5,
@@ -318,6 +324,8 @@ def fx_from_note(note):
     color_hit = words & COLOR_WORDS.keys()
     if color_hit:
         fx["color"] = COLOR_WORDS[sorted(color_hit)[0]]
+        if words & SHEEN:
+            fx["sheen"] = fx.pop("color")  # render_captions draws it on this caption's line only
 
     m = URL_RE.search(note)
     local = None if m else LOCAL_IMG_RE.search(note)
@@ -380,6 +388,8 @@ def describe(note, fx):
         parts.append("stops the started image here")
     if "color" in fx:
         parts.append(f'color -> rgba{tuple(fx["color"])}')
+    if "sheen" in fx:
+        parts.append(f'sheen on this line -> rgba{tuple(fx["sheen"])}')
     if "image_url" in fx:
         if fx["image_duration"] == "end":
             dur = "until end of video"
@@ -402,4 +412,6 @@ if __name__ == "__main__":  # self-check: python scripts/caption_fx.py
     assert "fade_in" not in fx_from_note("slow fade in https://x.com/a.gif")
     assert fx_from_note("whisper, fade in")["fade_in"]
     assert fx_from_note("red, violent growing shake")["shake_px"] == 20.0
+    fx = fx_from_note("gold sheen (word rule)")
+    assert fx == {"sheen": COLOR_WORDS["gold"]}, fx
     print("caption_fx ok")

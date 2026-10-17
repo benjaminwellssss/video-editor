@@ -35,6 +35,7 @@ import random
 import re
 import subprocess
 import sys
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from caption_fx import MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
@@ -341,6 +342,22 @@ def active_word_index(card, t):
     return active
 
 
+def apply_sheen(img, color, t):
+    """A shiny metallic gradient in `color` over a line drawn with a white fill: light top, darker band under the
+    middle, and a bright glint sweeping across about every 2 s. Multiplying keeps the black outline black."""
+    a = np.asarray(img, dtype=np.float32).copy()
+    h, w = a.shape[:2]
+    y = np.linspace(0.0, 1.0, h)[:, None]
+    x = np.linspace(0.0, 1.0, w)[None, :]
+    c = np.array(color[:3], dtype=np.float32)
+    light = np.interp(y, [0, .45, .58, 1], [.6, .05, -.35, .15])
+    glint = 0.8 * np.exp(-(((x + 0.35 * y) - ((t * 0.7) % 1.5 - 0.2)) / 0.07) ** 2)
+    k = np.clip(light + glint, -1, 1)[..., None]
+    grad = np.where(k >= 0, c + (255 - c) * k, c * (1 + k))
+    a[..., :3] *= grad / 255.0
+    return Image.fromarray(a.clip(0, 255).astype(np.uint8), "RGBA")
+
+
 def compose_card(card, t, style, cache):
     """Render one card's 1-2 lines onto a single transparent canvas, with the
     active word highlighted. Returns (block_img, top_center_y, bottom_edge_y):
@@ -358,12 +375,19 @@ def compose_card(card, t, style, cache):
     if card.get("_karaoke"):  # phrase captions: white words, the spoken one lit in the speaker's colour
         active_fill, fill_override = fill_override or HIGHLIGHT_GREEN, None
 
-    def get_line_image(words, active_idx):
+    def get_line_image(words, active_idx, line_no):
+        sheen = (card.get("_sheen") or {}).get(line_no)
+        fill, active = (WHITE, None) if sheen else (fill_override, active_fill)  # sheen tints a plain white line
+        if sheen:
+            active_idx = None
         key = (style["font"].path, style["font"].size, tuple(words), active_idx,
-               tuple(fill_override) if fill_override else None, tuple(active_fill) if active_fill else None)
+               tuple(fill) if fill else None, tuple(active) if active else None)
         if key not in cache:
-            cache[key] = render_line_image(words, active_idx, style, fill_override, active_fill)
-        return cache[key]
+            cache[key] = render_line_image(words, active_idx, style, fill, active)
+        if not sheen:
+            return cache[key]
+        img, oy, th = cache[key]
+        return apply_sheen(img, sheen, t - card["start"]), oy, th
 
     active_global = active_word_index(card, t)
     active_word = card["words"][active_global] if active_global is not None else None
@@ -372,7 +396,7 @@ def compose_card(card, t, style, cache):
     top_active = None
     if active_word is not None and active_word["line"] == 0:
         top_active = [w["line"] for w in card["words"][:active_global + 1]].count(0) - 1
-    top_img, top_oy, top_th = get_line_image(top_words, top_active)
+    top_img, top_oy, top_th = get_line_image(top_words, top_active, 0)
 
     has_bottom = len(card["lines"]) > 1
     bottom_img = bottom_oy = bottom_th = None
@@ -381,7 +405,7 @@ def compose_card(card, t, style, cache):
         bottom_active = None
         if active_word is not None and active_word["line"] == 1:
             bottom_active = [w["line"] for w in card["words"][:active_global + 1]].count(1) - 1
-        bottom_img, bottom_oy, bottom_th = get_line_image(bottom_words, bottom_active)
+        bottom_img, bottom_oy, bottom_th = get_line_image(bottom_words, bottom_active, 1)
 
     gap_px = LINE_SPACING_FRAC * top_th if has_bottom else 0
     block_w = max(top_img.width, bottom_img.width if has_bottom else 0)
@@ -587,6 +611,9 @@ def build_phrase_lanes(lanes):
                 "emphasis_scale": PHRASE_SCALE.get(n, PHRASE_SCALE_LONG) * first.get("emphasis_scale", 1.0),
                 "_fx": {k: v for k, v in first.get("_fx", {}).items() if k not in IMAGE_FX} if n == 1 else {},
             }
+            sheen = {w["line"]: c["_fx"]["sheen"] for w, c in zip(words, cur) if c.get("_fx", {}).get("sheen")}
+            if sheen:
+                card["_sheen"] = sheen  # only the line the color word sits in
             for k in ("fill", "_anchor_y", "_font", "lane"):
                 if k in first:
                     card[k] = first[k]
@@ -597,12 +624,12 @@ def build_phrase_lanes(lanes):
             text = " ".join(c.get("lines", [])).strip()
             if not text:
                 continue  # note-only cards draw nothing (their images were gathered already)
-            own = bool({k for k in c.get("_fx", {}) if k not in IMAGE_FX} - {"color"}) or len(text.split()) > 1
+            own = bool({k for k in c.get("_fx", {}) if k not in IMAGE_FX} - {"color", "sheen"}) or len(text.split()) > 1
             if cur and (own or c.get("speaker") != cur[-1].get("speaker")
                         or c["start"] - cur[-1]["end"] > PHRASE_GAP_S
                         or len(cur) >= PHRASE_MAX_WORDS
                         or len(" ".join(" ".join(x["lines"]) for x in cur)) + 1 + len(text) > PHRASE_MAX_CHARS
-                        or bool({k for k in cur[-1].get("_fx", {}) if k not in IMAGE_FX} - {"color"})):
+                        or bool({k for k in cur[-1].get("_fx", {}) if k not in IMAGE_FX} - {"color", "sheen"})):
                 flush()
             cur.append(c)
             if own:
@@ -836,6 +863,8 @@ def apply_fx_passes(cards, lane_no):
         if card["_fx"].get("color"):
             card["_base_fill"] = card.get("fill")
             card["fill"] = list(card["_fx"]["color"])
+        if card["_fx"].get("sheen"):
+            card["_sheen"] = {0: card["_fx"]["sheen"], 1: card["_fx"]["sheen"]}  # phrase captions narrow it to one line
         if card["_fx"].get("card_font"):
             key = card["_fx"]["card_font"].lower()
             path = next((os.path.join(FONTS_DIR, f) for f in os.listdir(FONTS_DIR)

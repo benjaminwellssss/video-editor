@@ -1,4 +1,5 @@
 """Give every caption card whose word is in assets/word_images.json that word's image, as a card note.
+Spoken color words ("_sheen_colors" there) get a "<color> sheen" note instead: a shiny gradient on that caption line.
 
 Usage: python apply_word_images.py <captions.json> [<captions.json> ...]
 
@@ -18,15 +19,24 @@ WORD_RULE_TAG = "(word rule)"  # render_captions never pairs these into start/en
 
 
 def load_rules():
-    raw = {k: v for k, v in json.load(open(RULES, encoding="utf-8")).items() if not k.startswith("_")}
-    return {k: raw[v] if isinstance(v, str) else v for k, v in raw.items()}  # "parried": "parry" shares parry's list
+    data = json.load(open(RULES, encoding="utf-8"))
+    raw = {k: v for k, v in data.items() if not k.startswith("_")}
+    rules = {k: raw[v] if isinstance(v, str) else v for k, v in raw.items()}  # "parried": "parry" shares parry's list
+    sheen = {k: v for k, v in data.get("_sheen_colors", {}).items() if not k.startswith("_")}
+    return rules, sheen
 
 
-def apply(cards, rules, seed):
+def apply(cards, rules, seed, sheen=None):
     used = {}
     for card in cards:
         word = re.sub(r"[^a-z']", "", " ".join(card.get("lines", [])).lower())
-        if word not in rules or card.get("note"):
+        if card.get("note"):
+            continue
+        if sheen and word in sheen:  # "I got a GOLD item": that caption line gets a gold sheen
+            card["note"] = f"{sheen[word]} sheen {WORD_RULE_TAG}"
+            used["sheen"] = used.get("sheen", 0) + 1
+            continue
+        if word not in rules:
             continue
         imgs = rules[word]
         key = id(imgs)  # aliases share a counter with the word they point to
@@ -37,12 +47,13 @@ def apply(cards, rules, seed):
 
 
 if __name__ == "__main__":
-    rules = load_rules()
-    # self-check: repeats rotate, existing notes are kept
-    demo = [{"lines": ["PARRY"]}, {"lines": ["PARRIED"]}, {"lines": ["PARRY"], "note": "keep"}]
-    assert apply(demo, rules, "x") == 2 and demo[0]["note"] != demo[1]["note"] and demo[2]["note"] == "keep"
+    rules, sheen = load_rules()
+    # self-check: repeats rotate, existing notes are kept, color words get a sheen note
+    demo = [{"lines": ["PARRY"]}, {"lines": ["PARRIED"]}, {"lines": ["PARRY"], "note": "keep"}, {"lines": ["GOLDEN!"]}]
+    assert apply(demo, rules, "x", sheen) == 3 and demo[0]["note"] != demo[1]["note"] and demo[2]["note"] == "keep"
+    assert demo[3]["note"] == f"gold sheen {WORD_RULE_TAG}", demo[3]
     for path in sys.argv[1:]:
         cards = json.load(open(path, encoding="utf-8"))
-        n = apply(cards, rules, os.path.basename(os.path.dirname(os.path.abspath(path))))
+        n = apply(cards, rules, os.path.basename(os.path.dirname(os.path.abspath(path))), sheen)
         json.dump(cards, open(path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-        print(f"{path}: {n} word images")
+        print(f"{path}: {n} word images / color sheens")

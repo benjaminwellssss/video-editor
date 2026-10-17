@@ -14,5 +14,10 @@
   ],
   "parried": "parry",
   "parrying": "parry",
-  "actually": ["assets/word_images/um_actually.png"]
+  "actually": ["assets/word_images/um_actually.png"],
+  "_sheen_colors": {
+    "_about": "Spoken color word -> that caption line gets a shiny metallic gradient in this color (caption_fx 'sheen'). Black/white are left out on purpose.",
+    "red": "red", "green": "green", "blue": "blue", "yellow": "yellow", "orange": "orange",
+    "purple": "purple", "pink": "pink", "gold": "gold", "golden": "gold", "silver": "silver"
+  }
 }
