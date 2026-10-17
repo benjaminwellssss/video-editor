@@ -269,19 +269,28 @@ def render_word_image(word, style, fill):
     return canvas, left_ox, top_oy, content_w, content_h
 
 
-def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None, active_fill=None):
+def render_line_image(words, active_idx, style=PRIMARY_STYLE, fill_override=None, active_fill=None, word_fx=None, t=0.0):
     """One caption line built word-by-word so the currently-spoken word (at
     `active_idx`, or None) can be colored separately from the rest. `style`
     picks font size/stroke/base-color — PRIMARY_STYLE (white) or
     SECONDARY_STYLE (yellow, 50% size) for a simultaneous second speaker.
     `fill_override`, when given, replaces style's base_fill for every
     non-active word in the line — used for per-speaker caption coloring
-    (see card["fill"] in compose_card)."""
+    (see card["fill"] in compose_card). `word_fx` {word index: ("color"|"sheen", rgba)} colors
+    single words - a note color, or a metallic sheen (at time t) corner to corner of that word only."""
     word_gap = style["word_gap"]
     base_fill = tuple(fill_override) if fill_override is not None else style["base_fill"]
     pieces = []
     for wi, word in enumerate(words):
-        fill = (tuple(active_fill) if active_fill else HIGHLIGHT_GREEN) if wi == active_idx else base_fill
+        kind, color = (word_fx or {}).get(wi, (None, None))
+        if kind == "sheen":
+            img, left_ox, top_oy, cw, ch = render_word_image(word, style, WHITE)
+            box = (left_ox, top_oy, left_ox + cw, top_oy + ch)
+            img.paste(apply_sheen(img.crop(box), color, t), box)
+            pieces.append((img, left_ox, top_oy, cw, ch))
+            continue
+        fill = (tuple(color) if kind == "color"
+                else (tuple(active_fill) if active_fill else HIGHLIGHT_GREEN) if wi == active_idx else base_fill)
         pieces.append(render_word_image(word, style, fill))
 
     total_w = sum(p[3] for p in pieces) + word_gap * (len(pieces) - 1)
@@ -384,18 +393,17 @@ def compose_card(card, t, style, cache):
         active_fill, fill_override = fill_override or HIGHLIGHT_GREEN, None
 
     def get_line_image(words, active_idx, line_no):
-        sheen = (card.get("_sheen") or {}).get(line_no)
-        fill, active = (WHITE, None) if sheen else (fill_override, active_fill)  # sheen tints a plain white line
-        if sheen:
-            active_idx = None
+        word_fx = (card.get("_word_fx") or {}).get(line_no)
+        if word_fx and "*" in word_fx:
+            word_fx = {i: word_fx["*"] for i in range(len(words))}
+        if word_fx and any(kind == "sheen" for kind, _ in word_fx.values()):  # the glint moves every frame: no cache
+            return render_line_image(words, active_idx, style, fill_override, active_fill, word_fx, t - card["start"])
         key = (style["font"].path, style["font"].size, tuple(words), active_idx,
-               tuple(fill) if fill else None, tuple(active) if active else None)
+               tuple(fill_override) if fill_override else None, tuple(active_fill) if active_fill else None,
+               tuple(sorted(word_fx.items())) if word_fx else None)
         if key not in cache:
-            cache[key] = render_line_image(words, active_idx, style, fill, active)
-        if not sheen:
-            return cache[key]
-        img, oy, th = cache[key]
-        return apply_sheen(img, sheen, t - card["start"]), oy, th
+            cache[key] = render_line_image(words, active_idx, style, fill_override, active_fill, word_fx)
+        return cache[key]
 
     active_global = active_word_index(card, t)
     active_word = card["words"][active_global] if active_global is not None else None
@@ -619,12 +627,23 @@ def build_phrase_lanes(lanes):
                 "emphasis_scale": PHRASE_SCALE.get(n, PHRASE_SCALE_LONG) * first.get("emphasis_scale", 1.0),
                 "_fx": {k: v for k, v in first.get("_fx", {}).items() if k not in IMAGE_FX} if n == 1 else {},
             }
-            sheen = {w["line"]: c["_fx"]["sheen"] for w, c in zip(words, cur) if c.get("_fx", {}).get("sheen")}
-            if sheen:
-                card["_sheen"] = sheen  # only the line the color word sits in
+            word_fx = {}
+            for i, (w, c) in enumerate(zip(words, cur)):
+                fx = c.get("_fx", {})
+                kind = "sheen" if fx.get("sheen") else "color" if fx.get("color") else None
+                if kind:  # only that word, never its whole line or phrase
+                    idx = sum(1 for x in words[:i] if x["line"] == w["line"])
+                    word_fx.setdefault(w["line"], {})[idx] = (kind, tuple(fx[kind]))
+            if word_fx:
+                card["_word_fx"] = word_fx
             for k in ("fill", "_anchor_y", "_font", "lane"):
                 if k in first:
                     card[k] = first[k]
+            if "_base_fill" in first:  # a note color replaced the first word's fill; the phrase keeps the speaker's
+                if first["_base_fill"] is None:
+                    card.pop("fill", None)
+                else:
+                    card["fill"] = first["_base_fill"]
             out.append(card)
             cur.clear()
 
@@ -875,7 +894,8 @@ def apply_fx_passes(cards, lane_no):
             card["_base_fill"] = card.get("fill")
             card["fill"] = list(card["_fx"]["color"])
         if card["_fx"].get("sheen"):
-            card["_sheen"] = {0: card["_fx"]["sheen"], 1: card["_fx"]["sheen"]}  # phrase captions narrow it to one line
+            sheen = ("sheen", tuple(card["_fx"]["sheen"]))
+            card["_word_fx"] = {0: {"*": sheen}, 1: {"*": sheen}}  # a one-word-per-card render: the whole card
         if card["_fx"].get("card_font"):
             key = card["_fx"]["card_font"].lower()
             path = next((os.path.join(FONTS_DIR, f) for f in os.listdir(FONTS_DIR)
