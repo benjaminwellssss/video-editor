@@ -2,7 +2,7 @@
 set -e
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 STREAMING="$(python "$SCRIPTS/local_paths.py" | tr -d '\r')"
-PROJ="E:/video-editor-projects/valheimin-ep4-longplay-vod"
+PROJ="$STREAMING/video-editor-projects/valheimin-ep4-longplay-vod"
 SHORTS="$PROJ/shorts"
 WORDS="$PROJ/transcript/words.json"
 RAW="$STREAMING/Videos/VOD/2026-09-14 20-23-43-track0.mp4"

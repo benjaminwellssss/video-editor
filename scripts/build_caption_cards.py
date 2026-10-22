@@ -5,11 +5,12 @@ A card breaks early on a >0.6s gap between words (natural pause).
 
 Usage: <venv-python> build_caption_cards.py <name> <out_cards.json> [shorts_dir]
 """
+from local_paths import streaming
 import json
 import re
 import sys
 
-SHORTS_DIR = r"E:\video-editor-projects\valheimin-ep1-longplay-vod\shorts"
+SHORTS_DIR = streaming(r"video-editor-projects\valheimin-ep1-longplay-vod\shorts")
 LEAD_S = 0.0  # cards start on the word itself: a 0.12s head start read as "popping up too early" (user, 2026-10-09)
 
 # on-screen caption text only — does not affect whether the word is censored
