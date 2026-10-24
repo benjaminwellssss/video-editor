@@ -14,7 +14,7 @@ Plan JSON keys:
     words          WhisperX words json ({"segments":[{"words":[...]}]} or a flat word list)
     source         source video
     audio_stream   0-based index among the source's audio streams (default 0)
-    fps            source frame rate (default 30)
+    fps            source frame rate (default: read from the source)
     out_dir        deliverable folder (mp4 / srt / metadata land here)
     job_dir        where <name>_cut.json / clip_infos / flagged report are written
     work_dir       scratch for per-segment encodes (deleted after a good render)
@@ -32,6 +32,7 @@ import sys
 import concurrent.futures as cf
 from pathlib import Path
 
+from media_info import video_fps
 from protected_names import is_cut
 
 FLAG_RE = re.compile(r"^(shit\w*|bullshit|ass|asses|bitch\w*|damn\w*|hell|pussy|tits?|crap|bastard\w*|dick\w*|piss\w*)$", re.I)
@@ -201,7 +202,7 @@ def encode_segment(job):
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{sg['start']:.3f}", "-t", f"{d:.3f}", "-i", plan["source"], *card_in,
            *video_map, "-map", f"0:a:{plan.get('audio_stream', 0)}",
            "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "22", "-b:v", "0",
-           "-maxrate", "12M", "-bufsize", "24M", "-g", "60", "-pix_fmt", "yuv420p", "-r", str(plan.get("fps", 30)),
+           "-maxrate", "12M", "-bufsize", "24M", "-g", "60", "-pix_fmt", "yuv420p", "-r", str(plan["fps"]),
            "-af", af, "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(out) + ".part.mkv"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     part = Path(str(out) + ".part.mkv")
@@ -253,6 +254,7 @@ def render(plan, segs, final_mp4, workers=3):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     plan = json.load(open(args[0], encoding="utf8"))
+    plan.setdefault("fps", video_fps(plan["source"]))
     name = plan["name"]
     job = Path(plan["job_dir"])
     out_dir = Path(plan["out_dir"])
@@ -261,7 +263,7 @@ def main():
     words = load_words(plan["words"])
     segs, total, excised = tighten(plan, words)
     excise_pats = [re.compile(p, re.I) for p in plan.get("excise", DEFAULT_EXCISE)]
-    fps = plan.get("fps", 30)
+    fps = plan["fps"]
     print(f"{name}: {len(plan['ranges'])} ranges -> {len(segs)} segments, {total/60:.1f} min "
           f"(raw ranges {sum(r[1]-r[0] for r in plan['ranges'])/60:.1f} min), excised {len(list(excised))} words")
     (job / f"{name}_cut.json").write_text(json.dumps(segs, indent=1))

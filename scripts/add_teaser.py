@@ -29,6 +29,8 @@ import sys
 
 import numpy as np
 
+from media_info import video_fps
+
 FADE = 0.03
 TAIL = 0.15     # air left after the teaser's last word
 MIN_LEN, MAX_LEN = 2.0, 5.0
@@ -141,7 +143,7 @@ def add(clip_dir, start, end, force=False):
              f"[tv][ta][1:v][ma]concat=n=2:v=1:a=1[v][a]")
     subprocess.run(["ffmpeg", "-y", "-v", "warning", "-i", src, "-i", src, "-filter_complex", graph,
                     "-map", "[v]", "-map", "[a]",
-                    "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", "30",
+                    "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", str(video_fps(src)),
                     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", mp4], check=True)
 
     teaser = []

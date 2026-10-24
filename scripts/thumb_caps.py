@@ -3,7 +3,7 @@
 Usage: python thumb_caps.py <cut.json> <source.mp4> <mic_track> <out_dir> [--words words.json] [--n 5]
 
 <cut.json> is the video's cut list, in either format: build_vod_cut's [{start, end, rec}, ...] (seconds), or a
-short's {"cut": [[timeline_start, timeline_end, source_start], ...]} (frames at 30 fps). Moments come from the
+short's {"cut": [[timeline_start, timeline_end, source_start], ...], "fps": N} (frames; fps defaults to 30). Moments come from the
 streamer's OWN mic track (friends and game never count), over the source ranges the video actually uses; a loud
 stretch with no transcribed word near it (a laugh) scores higher than loud talking. Frames are taken from the
 source recording at full resolution and cropped to the facecam box around the face. Needs OpenCV (cv2).
@@ -29,7 +29,8 @@ def ranges(cut_path):
     """[(source_start_s, timeline_start_s, duration_s)]"""
     d = json.load(open(cut_path, encoding="utf8"))
     if isinstance(d, dict):
-        return [(src / 30, a / 30, (b - a) / 30) for a, b, src in d["cut"]]
+        f = d.get("fps", 30)
+        return [(src / f, a / f, (b - a) / f) for a, b, src in d["cut"]]
     return [(s["start"], s["rec"], s["end"] - s["start"]) for s in d]
 
 

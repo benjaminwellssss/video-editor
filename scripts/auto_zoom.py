@@ -33,7 +33,9 @@ import sys
 
 import numpy as np
 
-W, H, FPS = 1080, 1920, 30
+from media_info import video_fps
+
+W, H, FPS = 1080, 1920, 30  # FPS is reset from the source clip in main()
 PANEL_H = 612                # facecam panel height in the 9:16 layout (the seam measures 612-616 on every 10-14 clip)
 DET_SCALE = 2                # face detection runs at 1/DET_SCALE size (full size with --frame: the facecam is small)
 ZOOM_SCALE = 1.0
@@ -278,7 +280,7 @@ def render(src, out, zooms, track):
 
 
 def main():
-    global W, H, PANEL_H, DET_SCALE, ZOOM_SCALE, HOLD_MAX_S, LAUGH_OUT_S
+    global W, H, FPS, PANEL_H, DET_SCALE, ZOOM_SCALE, HOLD_MAX_S, LAUGH_OUT_S
     args = sys.argv[1:]
     if "--frame" in args:
         W, H = map(int, args[args.index("--frame") + 1].lower().split("x"))
@@ -286,6 +288,7 @@ def main():
     if "--zoom-scale" in args:
         ZOOM_SCALE = float(args[args.index("--zoom-scale") + 1])
     src, out = args[0], args[1]
+    FPS = video_fps(src)
     cap_path = args[args.index("--captions") + 1] if "--captions" in args else os.path.join(os.path.dirname(os.path.abspath(src)), "captions.json")
     captions = json.load(open(cap_path, encoding="utf-8")) if os.path.exists(cap_path) else []
     db = loudness(src)

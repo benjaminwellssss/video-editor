@@ -29,6 +29,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import render_captions as rc  # noqa: E402
+from media_info import video_fps  # noqa: E402
 from caption_fx import fx_from_note  # noqa: E402
 
 VENV_PY = os.path.join(os.path.expanduser("~"), ".cache", "video-editor", "whisperx-venv", "Scripts", "python.exe")
@@ -121,6 +122,7 @@ def main():
     sidecar = rc.load_sidecar(captions)
     out = os.path.join(clip_dir, name + "_captioned.mp4")
     dur = duration(clip)
+    fps = video_fps(clip)
     cards = json.load(open(captions, encoding="utf-8"))
     py = VENV_PY if os.path.exists(VENV_PY) else sys.executable
 
@@ -138,12 +140,12 @@ def main():
         fetch_note_images(cards, clip_dir)
         step(3, "captions")
         caps = os.path.join(tmp, "caps.mov")
-        run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", caps] + ([] if "--words" in args else ["--phrases"]))
+        run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", caps, "--fps", str(fps)] + ([] if "--words" in args else ["--phrases"]))
 
         step(4, "voice layer")
         if sidecar.get("voice_overlay") is not False and any(c.get("speaker") for c in cards):
             voices = os.path.join(tmp, "voices.mov")
-            run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", voices, "--voices-only"])
+            run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", voices, "--voices-only", "--fps", str(fps)])
         else:
             voices = None
 
@@ -160,7 +162,7 @@ def main():
             graph += ";[b]null[v]"
         composed = os.path.join(tmp, "composed.mp4")
         run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "0:a:0",
-             "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", "30",
+             "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", str(fps),
              "-c:a", "copy", "-movflags", "+faststart", composed])
 
         step(6, "trims")

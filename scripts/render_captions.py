@@ -41,7 +41,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from caption_fx import COLOR_WORDS, MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
 
 W, H = 1080, 1920
-FPS = 30
+FPS = 30  # overridden by --fps <rate> (composite_short passes the clip's own rate)
 FONTS_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts"))
 # Spoken color words -> a sheen on their caption line, applied here at render time so no build step can skip it.
 # A card with any note of its own is left alone (hand edits win; a note like "plain" switches it off).
@@ -1119,7 +1119,10 @@ def draw_voice_overlay(frame, voices, talking):
 
 
 def main():
+    global FPS
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+    if "--fps" in sys.argv:
+        FPS = float(sys.argv[sys.argv.index("--fps") + 1])
     voices_only = "--voices-only" in sys.argv[4:]  # render just the "who's talking" layer
     phrases = "--phrases" in sys.argv[4:] or load_sidecar(cards_path).get("caption_style") == "phrases"
     font_choice = find_font_choice(cards_path)
