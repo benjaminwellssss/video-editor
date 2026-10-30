@@ -64,7 +64,7 @@ def credentials(interactive=False):
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
-    creds = Credentials.from_authorized_user_file(TOKEN, SCOPES) if os.path.exists(TOKEN) else None
+    creds = Credentials.from_authorized_user_file(TOKEN, SCOPES) if os.path.exists(TOKEN) and not interactive else None  # auth always re-consents: a still-valid token would skip the browser
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
