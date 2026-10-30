@@ -38,7 +38,9 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from caption_fx import COLOR_WORDS, MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position
+import short_layout
+
+from caption_fx import COLOR_WORDS, MAX_FACTOR, describe, fx_from_note, is_ramp_trigger, note_factor, parse_global_instruction, parse_text_position, ramp_percent
 
 W, H = 1080, 1920
 FPS = 30  # overridden by --fps <rate> (composite_short passes the clip's own rate)
@@ -836,15 +838,26 @@ def apply_fx_passes(cards, lane_no):
         if not target_fx:
             continue
         target_set = set(targets)
+        hits = []
         for other in cards:
             text_words = set(re.findall(r"[a-z']+", " ".join(other.get("lines", [])).lower()))
             if text_words & target_set:
                 merged = dict(target_fx)
                 merged.update(other["_fx"])  # that card's own note wins on shared keys
                 other["_fx"] = merged
+                hits.append(other)
+        # 'on every "OH" progressively vibrate more, start at 25% end on 200%': ramp across those cards in time order
+        if is_ramp_trigger(card.get("note")) and len(hits) > 1:
+            lo, hi = ramp_percent(card.get("note")) or (1.0, 1.5)
+            hits.sort(key=lambda c: c["start"])
+            for k in (k for k in RAMPABLE_KEYS if target_fx.get(k)):
+                for gi, h in enumerate(hits):
+                    f = lo + (hi - lo) * gi / (len(hits) - 1)
+                    h["_fx"][k] = 1.0 + (target_fx[k] - 1.0) * f if k == "scale_to" else target_fx[k] * f
+            card["_global_ramp"] = True
 
     for i, card in enumerate(cards):
-        if not is_ramp_trigger(card.get("note")):
+        if not is_ramp_trigger(card.get("note")) or card.pop("_global_ramp", False):
             continue
         keys = [k for k in RAMPABLE_KEYS if card["_fx"].get(k)]
         if not keys:
@@ -1119,8 +1132,10 @@ def draw_voice_overlay(frame, voices, talking):
 
 
 def main():
-    global FPS
+    global FPS, BAR_CENTER_Y, IMG_BOX_TOP, VO_BOTTOM
     cards_path, duration_s, out_path = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+    lay = short_layout.layout(load_sidecar(cards_path))
+    BAR_CENTER_Y, IMG_BOX_TOP, VO_BOTTOM = lay["caption_y"], lay["img_top"], lay["vo_bottom"]
     if "--fps" in sys.argv:
         FPS = float(sys.argv[sys.argv.index("--fps") + 1])
     voices_only = "--voices-only" in sys.argv[4:]  # render just the "who's talking" layer

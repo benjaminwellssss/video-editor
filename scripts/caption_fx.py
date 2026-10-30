@@ -211,9 +211,12 @@ GLOBAL_RE = re.compile(
     r'(?:make\s+all\s+instances\s+of|every\s+instance\s+of|every\s+time\s+it\s+says|'
     r'whenever\s+it\s+says|any\s+time\s+it\s+says)'
     r'\s+(.+?)\s+'
-    r'(?:do\s+(?:a\s+|an\s+)?|should\s+(?:be\s+)?)(.+)',
+    r'(?:do\s+(?:a\s+|an\s+)?|should\s+(?:be\s+)?)(.+)'
+    r'|(?:on\s+)?every\s+(["“][^"”]+["”])\s+(.+)',  # 'on every "OH" progressively vibrate more' (user, 10-30)
     re.I,
 )
+RAMP_START_RE = re.compile(r"start(?:s|ing)?\s+(?:at|on|from)\s+(\d+(?:\.\d+)?)\s*%", re.I)
+RAMP_END_RE = re.compile(r"end(?:s|ing)?\s+(?:at|on|with)\s+(\d+(?:\.\d+)?)\s*%", re.I)
 QUOTED_RE = re.compile(r'[\'"‘“]([^\'"’”]+)[\'"’”]')
 END_OF_VIDEO_RE = re.compile(r"(?:until|till|til|to)\s+(?:the\s+)?end\b|rest\s+of\s+the\s+video", re.I)
 
@@ -246,6 +249,14 @@ def is_ramp_trigger(note):
     return bool(_words(note) & RAMP_WORDS)
 
 
+def ramp_percent(note):
+    """(start, end) multipliers from "start at 25% ... end on 200%", or None when the note names neither."""
+    s, e = RAMP_START_RE.search(note or ""), RAMP_END_RE.search(note or "")
+    if not s and not e:
+        return None
+    return (float(s.group(1)) / 100 if s else 1.0), (float(e.group(1)) / 100 if e else 1.0)
+
+
 def parse_global_instruction(note):
     """Return (target_words, effect_note) for a note naming which words to
     apply an effect to everywhere they appear - "make all instances of "X,
@@ -258,7 +269,7 @@ def parse_global_instruction(note):
     m = GLOBAL_RE.search(note)
     if not m:
         return None
-    targets_raw, effect_note = m.groups()
+    targets_raw, effect_note = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
     quoted = QUOTED_RE.findall(targets_raw)
     word_source = " ".join(quoted) if quoted else targets_raw
     targets = [w for w in re.findall(r"[a-z']+", word_source.lower()) if w not in ("and", "or")]
@@ -415,4 +426,8 @@ if __name__ == "__main__":  # self-check: python scripts/caption_fx.py
     fx = fx_from_note("gold sheen (word rule)")
     assert fx == {"sheen": COLOR_WORDS["gold"]}, fx
     assert fx_from_note("https://x.com/a.gif; shake")["image_url"] == "https://x.com/a.gif"
+    n = 'on every "OH" progressively vibrate more. start at 25% end on 200%'
+    assert parse_global_instruction(n) == (["oh"], "progressively vibrate more. start at 25% end on 200%"), parse_global_instruction(n)
+    assert ramp_percent(n) == (0.25, 2.0) and ramp_percent("vibrate") is None
+    assert parse_global_instruction('make all instances of "yay" do a bounce') == (["yay"], "bounce")
     print("caption_fx ok")

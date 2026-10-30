@@ -30,12 +30,13 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import render_captions as rc  # noqa: E402
+import short_layout  # noqa: E402
 from media_info import video_fps  # noqa: E402
 from caption_fx import fx_from_note  # noqa: E402
 
 VENV_PY = os.path.join(os.path.expanduser("~"), ".cache", "video-editor", "whisperx-venv", "Scripts", "python.exe")
 HANDLE_GIF = streaming(r"Overlays + Images\Video Overlays\bold\handle-pop.gif")  # see the handle pop-up memory
-POPUP_W, POPUP_CX, POPUP_CY, POPUP_S = 396, 347, 1036, 4.96
+POPUP_W, POPUP_S = 396, 4.96  # centre comes from the layout (short_layout.py)
 
 
 def duration(path):
@@ -96,6 +97,67 @@ def popup_start(dur, spans):
 STEPS = 6
 
 
+WINDOW_RE = re.compile(r"\bblur\w*\b.*?\b(?:window|box|panel)\b.*?[\"“]([^\"”]+)[\"”]", re.I)
+WINDOW_S, TITLE_SIZE, TITLE_FADE = 2.5, 200, 0.4  # shortest time up, word size, blur fade-out
+
+
+def title_windows(cards):
+    """'add a blurred window at the beginning ... that says "X"' notes -> [(text, start, end)]: the whole frame blurs
+    and X appears one word at a time, like the "headphone warning" card (user, 2026-10-30). Up for the card's own
+    span, or WINDOW_S when the card is shorter."""
+    return [(m.group(1), c["start"], max(c["end"], c["start"] + WINDOW_S))
+            for c in cards for m in [WINDOW_RE.search(c.get("note") or "")] if m]
+
+
+def title_words(text, a, b, voice=None):
+    """[(word, start, end)]: each word on the voice's timing when there is a voice (intro_voice.json), otherwise
+    evenly spaced over the title (a small head start, a short hold on the last word)."""
+    words = text.upper().split()
+    if voice and len(voice["words"]) == len(words):
+        t0 = a + VOICE_T0
+        out, carry = [], None
+        for i, (w, (_, s, e)) in enumerate(zip(words, voice["words"])):
+            if e - s < 0.16 and i + 1 < len(words):  # too short to read alone ("a"): show it with the next word
+                carry = (f"{carry[0]} {w}" if carry else w, carry[1] if carry else s)
+                continue
+            w, s = (f"{carry[0]} {w}", carry[1]) if carry else (w, s)
+            carry = None
+            out.append((w, t0 + s, t0 + e if i + 1 < len(words) else b - 0.1))
+        return out
+    step = (b - a - 0.12 - 0.5) / len(words)
+    return [(w, a + 0.12 + i * step, (a + 0.12 + (i + 1) * step) if i + 1 < len(words) else b - 0.1)
+            for i, w in enumerate(words)]
+
+
+VOICE_T0 = 0.12  # the voice starts this long after the title does
+
+
+def load_voice(clip_dir):
+    """intro_voice.json next to the clip: {"wav": "intro_voice.wav", "words": [[word, start_s, end_s], ...]} (times inside the wav)."""
+    p = os.path.join(clip_dir, "intro_voice.json")
+    if not os.path.exists(p):
+        return None
+    d = json.load(open(p, encoding="utf-8"))
+    return {"wav": os.path.join(clip_dir, d["wav"]), "words": d["words"]}
+
+
+def word_png(word, font_file, tmp, k, i):
+    """A full-frame transparent layer with one title word, white with a black outline, centred."""
+    from PIL import Image, ImageDraw, ImageFont
+    size = TITLE_SIZE
+    f = ImageFont.truetype(font_file, size)
+    d = ImageDraw.Draw(Image.new("L", (1, 1)))
+    while d.textlength(word, font=f) > 960:  # long words shrink to fit
+        size -= 10
+        f = ImageFont.truetype(font_file, size)
+    img = Image.new("RGBA", (1080, 1920), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((540, 960), word, font=f, fill=(255, 255, 255, 255), anchor="mm",
+                             stroke_width=max(8, size // 14), stroke_fill=(0, 0, 0, 255))
+    path = os.path.join(tmp, f"title{k}_{i}.png")
+    img.save(path)
+    return path
+
+
 def step(k, name):
     print(f"[step {k}/{STEPS}] {name}", flush=True)  # Cabtions' progress bar reads these
 
@@ -126,13 +188,15 @@ def main():
     fps = video_fps(clip)
     cards = json.load(open(captions, encoding="utf-8"))
     py = VENV_PY if os.path.exists(VENV_PY) else sys.executable
+    lay = short_layout.layout(sidecar)
+    popup_cx, popup_cy = lay["popup"]
 
     with tempfile.TemporaryDirectory(prefix="composite_", ignore_cleanup_errors=True) as tmp:
         base = clip
         step(1, "zoom")
         if "--no-zoom" not in args:
             base = os.path.join(tmp, "zoom.mp4")
-            zoom = [zoom_python(), os.path.join(HERE, "auto_zoom.py"), clip, base]
+            zoom = [zoom_python(), os.path.join(HERE, "auto_zoom.py"), clip, base, "--panel", "%d:%d" % lay["panel"]]
             if "--punches" in args:
                 zoom += ["--punches", args[args.index("--punches") + 1]]
             run(zoom)
@@ -155,16 +219,40 @@ def main():
         print(f"  handle pop-up at {t0:.1f}s", flush=True)
         inputs = ["-i", base, "-i", caps, "-itsoffset", f"{t0:.2f}", "-i", HANDLE_GIF]
         graph = (f"[2:v]scale={POPUP_W}:-1[g];[0:v][1:v]overlay=0:0[a];"
-                 f"[a][g]overlay=x={POPUP_CX}-w/2:y={POPUP_CY}-h/2:eof_action=pass[b]")
+                 f"[a][g]overlay=x={popup_cx}-w/2:y={popup_cy}-h/2:eof_action=pass[b]")
         if voices:
             inputs += ["-i", voices]
-            graph += ";[b][3:v]overlay=0:0[v]"
+            graph += ";[b][3:v]overlay=0:0[w0]"
         else:
-            graph += ";[b]null[v]"
+            graph += ";[b]null[w0]"
+        wins = title_windows(cards)
+        voice = load_voice(clip_dir)
+        for k, (text, a, b) in enumerate(wins):  # full-frame blur + one-word-at-a-time title, on top of everything
+            font_file = sidecar.get("font_file") or r"C:\Windows\Fonts\beachday.otf"
+            graph += (f";[w{k}]split[w{k}a][w{k}b];[w{k}b]trim={a:.3f}:{b:.3f},setpts=PTS-STARTPTS+{a:.3f}/TB,"
+                      f"gblur=sigma=40,eq=brightness=-0.10,format=yuva420p,"
+                      f"fade=t=out:st={b - TITLE_FADE:.3f}:d={TITLE_FADE}:alpha=1[bl{k}];"
+                      f"[w{k}a][bl{k}]overlay=0:0:eof_action=pass[wc{k}_0]")
+            tw = title_words(text, a, b, voice)
+            for i, (word, ws, we) in enumerate(tw):
+                n = inputs.count("-i")  # index of this word's layer
+                inputs += ["-loop", "1", "-t", f"{dur:.3f}", "-i", word_png(word, font_file, tmp, k, i)]
+                last = i == len(tw) - 1
+                graph += f";[wc{k}_{i}][{n}:v]overlay=0:0:enable='between(t,{ws:.3f},{we:.3f})'[" + (f"w{k + 1}" if last else f"wc{k}_{i + 1}") + "]"
+            print(f"  title {a:.1f}-{b:.1f}s, one word at a time{' on the voice' if voice else ''}: {text!r}", flush=True)
+        graph += f";[w{len(wins)}]null[v]"
+        amap, acodec = ["-map", "0:a:0"], ["-c:a", "copy"]
+        if voice and wins:  # the intro voice, mixed in over the clip's own audio
+            n = inputs.count("-i")
+            inputs += ["-i", voice["wav"]]
+            ms = int((wins[0][1] + VOICE_T0) * 1000)
+            graph += (f";[{n}:a]aresample=48000,pan=stereo|c0=c0|c1=c0,adelay={ms}|{ms},volume=1.5[vo];"
+                      "[0:a][vo]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95:level=disabled[am]")
+            amap, acodec = ["-map", "[am]"], ["-c:a", "aac", "-b:a", "192k"]
         composed = os.path.join(tmp, "composed.mp4")
-        run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "0:a:0",
+        run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", *amap,
              "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", str(fps),
-             "-c:a", "copy", "-movflags", "+faststart", composed])
+             *acodec, "-movflags", "+faststart", composed])
 
         step(6, "trims")
         if sidecar.get("trims"):
