@@ -1,6 +1,10 @@
 """Thumbnail cutout without redrawing the face: 4x upscale, cut out the person, put him on pure white.
 
-Usage: python thumb_cutout.py <cap.png> [<cap.png> ...] [--out <dir>] [--model birefnet-portrait] [--no-upscale]
+Usage: python thumb_cutout.py <cap.png> [<cap.png> ...] [--out <dir>] [--model hybrid|<rembg model>] [--no-upscale]
+
+--model hybrid (default) merges two segmentations: birefnet-portrait gives a clean body but clips the sides of the
+head (cap brim, headphones), isnet-general-use keeps the whole head but drags in background; isnet only counts
+next to birefnet's shape (user, 2026-10-23: the portrait-only cutout was "cutting sides of my head off").
 
 --no-upscale cuts out the cap at its own size (the user found the 4x upscale of a tiny facecam face
 too soft, 2026-10-17). Both steps keep the real pixels (no generative face): Real-ESRGAN's general photo model (not a face-restore
@@ -26,7 +30,29 @@ def upscale(src, dst):
     subprocess.run([ESRGAN, "-i", src, "-o", dst, "-n", "realesrgan-x4plus", "-s", "4"], check=True, capture_output=True)
 
 
+def hybrid_alpha(b, i):
+    """birefnet-portrait mask b + isnet-general-use mask i (uint8): isnet only within ~3% of the image height of
+    birefnet's shape, holes closed, largest blob kept, lightly feathered."""
+    h = b.shape[0]
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * max(2, round(h * 0.03)) + 1,) * 2)
+    near = cv2.dilate((b > 128).astype(np.uint8), k)
+    solid = (np.maximum(b, i * near) > 128).astype(np.uint8)
+    solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, k)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(solid)
+    if n < 2:
+        return b
+    keep = (lab == 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])).astype(np.float32)
+    # gaps the close filled (between hand and face, arm and body): both models say background -> cut them back out
+    gap = ((b < 128) & (i < 128) & (keep > 0)).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(gap)
+    for j in range(1, n):
+        if st[j, cv2.CC_STAT_AREA] > b.size * 0.0005:
+            keep[lab == j] = 0
+    return (cv2.GaussianBlur(keep, (0, 0), max(1.0, h / 600)) * 255).astype(np.uint8)
+
+
 LIME = (155, 255, 46)  # signature sticker outline, RGB
+GLOW = 0.2  # lime glow opacity (user, 2026-11-02: full strength was too intense); the white ring stays solid
 
 
 def sticker(rgba):
@@ -45,7 +71,7 @@ def sticker(rgba):
     for ring, rgb in ((grow(lime_r, lime_s), LIME), (grow(white_r, white_s), (255, 255, 255))):
         f = ring[:, :, None].astype(np.float32) / 255
         out[:, :, :3] = out[:, :, :3] * (1 - f) + np.array(rgb, np.float32) * f
-        out[:, :, 3:] = np.maximum(out[:, :, 3:], f * 255)
+        out[:, :, 3:] = np.maximum(out[:, :, 3:], f * 255 * (GLOW if rgb == LIME else 1))
     f = a[:, :, None].astype(np.float32) / 255
     body = np.zeros_like(out[:, :, :3]); body[pad:, pad:pad + w] = rgba[:, :, :3]
     out[:, :, :3] = out[:, :, :3] * (1 - f) + body * f
@@ -55,10 +81,10 @@ def sticker(rgba):
 def main():
     args = sys.argv[1:]
     out = args[args.index("--out") + 1] if "--out" in args else None
-    model = args[args.index("--model") + 1] if "--model" in args else "birefnet-portrait"
+    model = args[args.index("--model") + 1] if "--model" in args else "hybrid"
     files = [a for i, a in enumerate(args) if a.lower().endswith((".png", ".jpg", ".jpeg"))
              and not (i and args[i - 1] in ("--out", "--model"))]
-    session = new_session(model)
+    sessions = [new_session(m) for m in (("birefnet-portrait", "isnet-general-use") if model == "hybrid" else (model,))]
     for f in files:
         d = out or os.path.dirname(os.path.abspath(f))
         os.makedirs(d, exist_ok=True)
@@ -70,7 +96,10 @@ def main():
                 big = os.path.join(t, "big.png")
                 upscale(f, big)
                 rgb = cv2.imread(big)
-        rgba = remove(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB), session=session)  # H x W x 4, RGBA
+        rgb3 = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+        masks = [remove(rgb3, session=se, only_mask=True) for se in sessions]
+        alpha = hybrid_alpha(*masks) if len(masks) == 2 else masks[0]
+        rgba = np.dstack([rgb3, alpha])  # H x W x 4, RGBA
         alpha = rgba[:, :, 3:4].astype(np.float32) / 255
         white = (rgba[:, :, :3] * alpha + 255 * (1 - alpha)).astype(np.uint8)
         cv2.imwrite(os.path.join(d, base + "_white.png"), cv2.cvtColor(white, cv2.COLOR_RGB2BGR))
