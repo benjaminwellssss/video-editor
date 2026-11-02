@@ -12,3 +12,6 @@ projects/*/transcript/stems/
 
 # family names for the censor filter: never public
 assets/protected_names.json
+
+# this machine's folders
+local_paths.json

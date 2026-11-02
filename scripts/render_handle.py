@@ -3,11 +3,12 @@ at 50% the caption font size, for the empty headroom above the facecam.
 
 Usage: render_handle.py <text> <out.png>
 """
+import os
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1080, 1920
-FONT_PATH = r"C:\Users\Bem\Desktop\video-editor\assets\fonts\BebasNeue-Regular.ttf"
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts", "BebasNeue-Regular.ttf")
 FONT_SIZE = 75  # 50% of the 150px caption font
 STROKE_WIDTH = 4  # roughly half of the caption's 7px stroke
 TOP_Y = 55  # top margin within the facecam headroom

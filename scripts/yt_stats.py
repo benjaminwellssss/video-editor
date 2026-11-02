@@ -13,6 +13,7 @@ One-time setup (YouTube needs your permission, so it can't be skipped):
 3. Save it as ~/.config/video-editor/youtube_client_secret.json
 The first run opens your browser to sign in; the token is kept next to that file. Neither is in any repo.
 """
+from local_paths import streaming
 import csv
 import datetime as dt
 import os
@@ -62,7 +63,7 @@ def main():
     from googleapiclient.discovery import build
     args = sys.argv[1:]
     days = int(args[args.index("--days") + 1]) if "--days" in args else 90
-    out_dir = args[args.index("--out") + 1] if "--out" in args else r"E:\Streaming\Videos\Analytics"
+    out_dir = args[args.index("--out") + 1] if "--out" in args else streaming(r"Videos\Analytics")
     creds = credentials()
     yt = build("youtube", "v3", credentials=creds)
     ya = build("youtubeAnalytics", "v2", credentials=creds)

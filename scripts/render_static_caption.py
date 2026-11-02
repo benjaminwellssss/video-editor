@@ -2,13 +2,14 @@
 
 Usage: render_static_caption.py <text> <duration_s> <out.mov>
 """
+import os
 import subprocess
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1920, 1080
 FPS = 30
-FONT_PATH = r"C:\Users\Bem\Desktop\video-editor\assets\fonts\BebasNeue-Regular.ttf"
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "fonts", "BebasNeue-Regular.ttf")
 FONT_SIZE = 90
 STROKE_WIDTH = 6
 Y_FROM_BOTTOM = 160

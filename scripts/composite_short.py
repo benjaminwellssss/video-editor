@@ -13,6 +13,7 @@ caption editor's sidecar). Writes <clip_dir>/<clip>_captioned.mp4, replacing any
 6. composites it all in that order over the zoomed clip, keeping the clip's audio
 7. apply_trims.py, when the sidecar has "trims"
 """
+from local_paths import streaming
 import hashlib
 import io
 import json
@@ -33,7 +34,7 @@ from media_info import video_fps  # noqa: E402
 from caption_fx import fx_from_note  # noqa: E402
 
 VENV_PY = os.path.join(os.path.expanduser("~"), ".cache", "video-editor", "whisperx-venv", "Scripts", "python.exe")
-HANDLE_GIF = r"E:\Streaming\Overlays + Images\Video Overlays\bold\handle-pop.gif"  # see the handle pop-up memory
+HANDLE_GIF = streaming(r"Overlays + Images\Video Overlays\bold\handle-pop.gif")  # see the handle pop-up memory
 POPUP_W, POPUP_CX, POPUP_CY, POPUP_S = 396, 347, 1036, 4.96
 
 

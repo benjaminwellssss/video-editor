@@ -1,5 +1,5 @@
 """Render the retro "facecam.exe" window-chrome frame (matching
-overlay_facecam.html's design - see E:\\Streaming\\Overlays + Images\\overlay_facecam.html)
+overlay_facecam.html's design - see <streaming-folder>\\Overlays + Images\\overlay_facecam.html)
 as a transparent PNG overlay, sized around a given video content box.
 
 Usage: <python> render_facecam_frame.py <content_w> <content_h> <out_path>
