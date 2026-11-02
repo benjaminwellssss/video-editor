@@ -10,7 +10,7 @@ from fractions import Fraction
 
 def video_fps(path):
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
-                        "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout.strip()
+                        "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout.split()[0]  # ffprobe 9 can print the stream twice (stream group)
     return float(Fraction(r))
 
 

@@ -10,7 +10,7 @@ plan.json:
   "source": "<mp4>", "audio_stream": 0,
   "face_crop": [w,h,x,y], "fg_height": 1080, "fg_bottom_aligned": false,
   "handle": "<handles gif>",
-  "out_dir": "<streaming-folder>/Videos/Clips/<MM-DD-YYYY_GAME>",
+  "out_dir": "<streaming-folder>/Videos/<MM-DD-YYYY> - <Game>/Clips",
   "work_dir": "<scratch dir>", "job_dir": "<project job shorts dir for segment files>",
   "base_tags": ["valheim funny moments", ...],
   "hashtags": "#Valheim #FunnyGaming ...",

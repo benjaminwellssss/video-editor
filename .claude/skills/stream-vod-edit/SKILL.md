@@ -87,27 +87,31 @@ cheaper than diagnosing the symptom later.
 
 ## File destinations
 
-Everything lives under `<streaming-folder>\Videos\`, which has four subfolders:
+**Since 2026-10-30, everything is filed by stream date**, one folder per stream under `<streaming-folder>\Videos\`:
+`<MM-DD-YYYY> - <Game>\` (two games one night: `10-26-2026 - Age of Mythology + Arc Raiders`). Its subfolders
+are made only when something goes in them (`scripts/stream_folder.py <date> [game] [sub]` finds or makes the path;
+picture of the layout: `<streaming-folder>\Videos\_Template\`):
 
 | Subfolder | Contents |
 |---|---|
-| `VOD` | The full-length recording after cleanup (dead air trimmed, forbidden-word scenes cut, "fuck"/slurs excised) — still the whole stream, not a highlight reel. |
-| `EDITS` | The curated 20-40 min highlight edit (or whatever length the user asks for — treat a stated length as a ceiling, not a target: "at longest 40 min" means deliver *up to* 40, not pad to it). |
-| `CLIPS` | All vertical 9:16 short-form outputs, captioned. |
-| `RESOLVE` | Resolve project backups/exports and any Resolve-specific working files (not raw footage). |
+| `VOD` | The night's OBS recordings (moved in from `Videos\VOD\` at intake), CUTOUT cam files, and the cleaned full-length VOD export (dead air trimmed, forbidden-word scenes cut, "fuck"/slurs excised). |
+| `Videos` | The long-form edit(s) + .srt (treat a stated length as a ceiling, not a target: "at longest 40 min" means deliver *up to* 40, not pad to it). |
+| `Clips` | Vertical 9:16 shorts: `PROOFS\NN_name.mp4` first, then one folder per picked short. |
+| `Metadata` | Long-form metadata / titles / tags (a short's own metadata.txt stays in its clip folder). |
+| `Thumbnails` | Only the chosen `thumbN_final.jpg` on top; everything used to make it (caps, stickers, backgrounds, mockups, editor files) in `Thumbnails\Pieces\`. |
+| `Resolve` | Resolve project exports and Resolve-specific working files (not raw footage). |
 
-**Folder-per-batch rule:** for every job, create one new dated folder in
-*each* subfolder you touch (not just `CLIPS`) — e.g. a VOD edit pass creates
-`<streaming-folder>\Videos\VOD\09-09-2026_Valheim\`, the highlight reel creates the
-matching folder under `EDITS`, and the shorts batch creates it under `CLIPS`.
+Mashups are not by stream: `Videos\Music Videos\<MM-DD-YYYY_Name>\`. The old by-type folders (`CLIPS`, `EDITS`,
+`RESOLVE`, VOD batches) were re-filed on 10-30; `Videos\_reorg_2026-10-30_moves.csv` maps every old path to its
+new one, so read older notes through it.
 
-**Inside a `CLIPS` batch folder, confirmed 2026-09-18: every short gets its
+**Inside the `Clips` folder, confirmed 2026-09-18: every short gets its
 own subfolder**, named after the clip (`lord_ass_king/`, not a
 `short_lord_ass_king.mp4` file sitting flat next to a dozen others). That
 folder holds the clip's full deliverable set together:
 
 ```
-CLIPS/09-17-2026_Valheim/lord_ass_king/
+09-17-2026 - Valheim/Clips/lord_ass_king/
   lord_ass_king.mp4
   captions.json       <- the caption cards.json used for this render
   metadata.txt
@@ -125,7 +129,7 @@ named for what changed** — not a filename suffix like `_v2` or `_colored`
 sitting flat next to the original:
 
 ```
-CLIPS/09-17-2026_Valheim/lord_ass_king/
+09-17-2026 - Valheim/Clips/lord_ass_king/
   lord_ass_king.mp4
   captions.json
   metadata.txt
@@ -135,15 +139,13 @@ CLIPS/09-17-2026_Valheim/lord_ass_king/
     metadata.txt
 ```
 
-`VOD`/`EDITS` batches are usually a single file and don't need this
-per-item nesting — this rule is specifically for `CLIPS`, where a batch is
+`VOD`/`Videos` usually hold a file or two and don't need this
+per-item nesting — this rule is specifically for `Clips`, where a batch is
 several independent shorts (and sometimes several variants of one short).
 
-**Naming format:** `MM-DD-YYYY_GAME` (or `MM-DD-YYYY_EVENTNAME` for a non-game
-stream), using the date the content was *recorded*, not the edit date. If a
-second distinct batch lands on the same date+game (a second editing pass, a
-different highlight cut, etc.), disambiguate with a trailing number:
-`MM-DD-YYYY_GAME_2`, `_3`, ... Don't number the first/only batch.
+**Naming format:** `MM-DD-YYYY - Game` (or `MM-DD-YYYY - EVENTNAME` for a non-game
+stream), using the date the stream was *recorded*, not the edit date. A second
+edit of the same night goes in the same folder under its own file name.
 
 Working/scratch files (raw transcripts, intermediate ffmpeg renders, caption
 card JSON) stay under the project's own `projects/<job>/` tree per
@@ -1270,8 +1272,8 @@ the video file — do them in one pass rather than waiting to be asked for
 each:
 
 1. Render the timeline (`render.set_format_and_codec` mp4/H264,
-   `render.set_settings` with `TargetDir`/`CustomName` pointed at the dated
-   `EDITS` batch folder, `add_job` + `start`). **Always pass
+   `render.set_settings` with `TargetDir`/`CustomName` pointed at the stream-date
+   folder's `Videos` subfolder, `add_job` + `start`). **Always pass
    `ExportAudio: true` (and `ExportVideo: true`) explicitly in that
    `set_settings` call — don't rely on the default.** Confirmed
    2026-09-16: `timeline_frame.capture` (used constantly through a job for
@@ -1298,8 +1300,8 @@ each:
    finished (see Non-negotiable 4a — the same "looks done but isn't" trap
    applies to Resolve's own render, not just ffmpeg).
 2. Build the `.srt` per "Long-edit SRT captions" above, including the
-   ASR-garble spot-check, saved alongside the video in the same dated
-   `EDITS` folder.
+   ASR-garble spot-check, saved alongside the video in the same
+   `Videos` folder.
 3. Write the `*_metadata.txt` deliverable (TITLE/DESCRIPTION/TAGS, and a
    CHAPTERS block with `record_frame/fps` timestamps for every structural
    beat if the cut list has named scenes) in the same folder, matching the
@@ -1338,7 +1340,7 @@ Instagram: https://www.instagram.com/beanjahmean
 X: https://x.com/beanjahmean
 ```
 
-The reference file is `CLIPS/10-02-2026_Northgard/n_tony_godfather_wedding/mafia-bit-cut/metadata.txt`.
+The reference file is `10-02-2026 - Northgard/Clips/n_tony_godfather_wedding/mafia-bit-cut/metadata.txt`.
 
 #### Title research + 3 title options (user, 2026-10-09)
 
@@ -1477,7 +1479,9 @@ here — this section covers everything else.
   the [preview clip] at the front like you did") — once established for a
   given channel/style, keep doing it on subsequent edits without being
   asked again.
-- **Every short opens with a 2-5 second teaser (user, 2026-10-08).** The
+- **RETIRED 2026-10-30: shorts get NO teaser** ("the short form content is TOO short to have a teaser").
+  Start straight on the bit. The old rule below is kept only for history; don't run `add_teaser.py` on shorts.
+- ~~**Every short opens with a 2-5 second teaser (user, 2026-10-08).**~~ The
   short version of the cold open: the funniest beat of the short itself
   (usually the punchline or the big laugh) plays first, then the short runs
   from its normal start, so viewers are hooked and stay for the whole thing.
@@ -1555,14 +1559,14 @@ here — this section covers everything else.
   describing what actually happens in the episode (the real content beats,
   not jokes). Do not go back to the earlier style of chaining 3-4 bit
   references into one descriptive paragraph — that was explicitly corrected.
-- **Every mid-length edit (the `EDITS` deliverable) always gets an
+- **Every mid-length edit (the `Videos` deliverable) always gets an
   accompanying `.srt`** — not just when captions are separately requested.
   Generate it automatically as part of finishing that edit, extrapolated
   from the same word-level WhisperX transcript used for cutting, with
   timestamps reflecting the *final cut's* timeline (not the raw VOD's
   original timestamps — cuts shift everything downstream). **Save the
   `.srt` in the same dated folder as the main cut video itself**
-  (`<streaming-folder>\Videos\EDITS\MM-DD-YYYY_GAME\`), named to match the video
+  (`<streaming-folder>\Videos\MM-DD-YYYY - Game\Videos\`), named to match the video
   file so the pairing is obvious.
 - **Every mid-length edit also gets a YouTube tag cloud** — a standing
   deliverable alongside the description and `.srt`, not a one-off ask.
@@ -1623,10 +1627,11 @@ here — this section covers everything else.
 `python scripts/composite_short.py <clip_dir>` is the standard finish for a 9:16 short. It writes
 `<clip>_captioned.mp4` next to the clip, replacing any older one:
 
-1. `auto_zoom.py` zooms the facecam panel in on laughs, following the face, before any overlay goes on. Only the
-   facecam panel zooms, and only inward, so it never covers more of the gameplay. A laugh is loud, bursty audio
-   with no transcribed words, confirmed by head movement; loud talking and still faces get nothing or a tiny bump.
-   `--no-zoom` skips it; `--punches 3.2,10.5` adds laugh zooms by hand.
+1. `auto_zoom.py` zooms the facecam panel in only while the streamer's own mic is active, following the face, before
+   any overlay goes on. Friends and game audio never trigger it. Only the facecam panel zooms, and only inward, so it
+   never covers more of the gameplay. The mic is cut from the job folder using `shorts/<clip>_cut.json` and
+   `raw/*track2*`; with no cut list or mic there's no automatic zoom. `--no-zoom` skips it; `--punches 3.2,10.5` adds
+   zooms by hand.
 2. Fetches image/GIF links from the caption notes that aren't cached yet.
 3. Renders **phrase captions** (`render_captions.py --phrases`): one-word cards grouped by speaker into short
    two-line phrases, white text with the spoken word lit in the speaker's colour, single words bigger.

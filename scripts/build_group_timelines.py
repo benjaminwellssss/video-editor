@@ -8,7 +8,7 @@ Usage:
     python scripts/build_group_timelines.py <groups.json> [group name ...]
 
 groups.json = list of {"name", "kind": "n"|"n_window"|"dw", "clip_id" (media pool item id),
-                       "infos": [{start_frame,end_frame,record_frame}], "markers": [[rec_frame, label]]}
+                       "infos": [{start_frame,end_frame,record_frame[,clip_id]}], "markers": [[rec_frame, label]]}
 
 Layout recipe (1920x1080 timeline, then a centered 608x1080 crop to 9:16):
     V1 (audio too) blurred bg zoom 2.12 | V2 gameplay zoom 0.84 tilt -88 | V3 facecam, per FACE:
@@ -43,7 +43,14 @@ def find_clip(folder, clip_id):
 
 def build(project, pool, group):
     name = group["name"]
-    clip = find_clip(pool.GetRootFolder(), group["clip_id"])
+    clips = {}
+
+    def clip_for(c):
+        cid = c.get("clip_id", group["clip_id"])
+        if cid not in clips:
+            clips[cid] = find_clip(pool.GetRootFolder(), cid)
+        return clips[cid]
+
     tl = None
     for i in range(1, project.GetTimelineCount() + 1):
         t = project.GetTimelineByIndex(i)
@@ -66,7 +73,7 @@ def build(project, pool, group):
     infos = []
     for track in (1, 2, 3):
         for c in group["infos"]:
-            d = {"mediaPoolItem": clip, "startFrame": c["start_frame"], "endFrame": c["end_frame"],
+            d = {"mediaPoolItem": clip_for(c), "startFrame": c["start_frame"], "endFrame": c["end_frame"],
                  "recordFrame": start + c["record_frame"], "trackIndex": track}
             if track > 1:
                 d["mediaType"] = 1

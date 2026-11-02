@@ -5,18 +5,20 @@ A card breaks early on a >0.6s gap between words (natural pause).
 
 Usage: <venv-python> build_caption_cards.py <name> <out_cards.json> [shorts_dir]
 """
+from local_paths import streaming
 import json
+import os
 import re
 import sys
 
+from build_vod_cut import CENSOR_RE
 from protected_names import MARK, is_protected
 
-SHORTS_DIR = r"E:\video-editor-projects\valheimin-ep1-longplay-vod\shorts"
+SHORTS_DIR = streaming(r"video-editor-projects\valheimin-ep1-longplay-vod\shorts")
 LEAD_S = 0.0  # cards start on the word itself: a 0.12s head start read as "popping up too early" (user, 2026-10-09)
 
-# on-screen caption text only — does not affect whether the word is censored
-# in audio (see skill's Censoring tiers: "ass"/"shit" keep their audio, only
-# "fuck"/slurs get cut). Exact whole-word match only, not substring (so
+# on-screen caption text only; the audio for these words is covered by
+# censor_noise.py (10-31 rule: swears are censored, never cut). Exact whole-word match only, not substring (so
 # "GLASS"/"PASSING" are untouched).
 EMOJI_SUBS = {
     "ASS": "\U0001F434",       # 🐴 donkey
@@ -32,6 +34,10 @@ def clean_word(w):
     cleaned = re.sub(r"[^A-Za-z0-9'\-]", "", w).upper()
     if cleaned in EMOJI_SUBS:
         return EMOJI_SUBS[cleaned]
+    if cleaned in ("SHUPER", "JARED"):  # 10-31 rule: written/tagged as the_shuper
+        return "THE_SHUPER"
+    if CENSOR_RE.match(cleaned):  # any other swear (bitch, crap, shite...): star it out, audio gets the grunt
+        return cleaned[0] + "*" * (len(cleaned) - 1)
     # hyphenated compounds (e.g. "KISS-ASS") — substitute the matching part and
     # drop the hyphen against an emoji (want "KISS🐴", not "KISS-🐴"): a
     # hyphen is a word-joining mark for two text words, not for text-next-to-
@@ -140,12 +146,51 @@ def words_to_cards_single(words):
     return cards
 
 
+def load_split_words(path):
+    """{"word","start","end","speaker"} words from transcribe_split.py -> [{"start","end","text","speaker"}]."""
+    d = json.load(open(path, encoding="utf-8"))
+    out = []
+    for w in d["segments"][0]["words"]:
+        clean = clean_word(w.get("word", ""))
+        if clean:
+            out.append({"start": w["start"], "end": w["end"], "text": clean, "speaker": w["speaker"]})
+    return out
+
+
+def words_to_cards_split(words):
+    """Cards per speaker (a card never mixes voices), merged by time; an earlier card is trimmed where the next one starts."""
+    cards = []
+    for who in dict.fromkeys(w["speaker"] for w in words):
+        for c in words_to_cards([w for w in words if w["speaker"] == who]):
+            c["speaker"] = who
+            cards.append(c)
+    cards.sort(key=lambda c: c["start"])
+    for a, b in zip(cards, cards[1:]):
+        if a["end"] > b["start"]:
+            a["end"] = max(b["start"], a["start"] + 0.1)
+    return cards
+
+
+def write_default_sidecar(cards_path):
+    """captions_speakers.json next to captions.json, if missing. Without one the Cabtions editor makes you pick a speakers file
+    on first save, and picking captions.json itself overwrites the cards with the sidecar (10-30 SC1)."""
+    import os
+    side = os.path.join(os.path.dirname(os.path.abspath(cards_path)), os.path.splitext(os.path.basename(cards_path))[0] + "_speakers.json")
+    if not os.path.exists(side):
+        json.dump({}, open(side, "w", encoding="utf-8"))
+    return side
+
+
 def main():
     name, out_path = sys.argv[1], sys.argv[2]
     shorts_dir = sys.argv[3] if len(sys.argv) > 3 else SHORTS_DIR
-    words = load_words(f"{shorts_dir}\\{name}_track0_words.json")
-    cards = words_to_cards(words)
+    split = f"{shorts_dir}\\{name}_split_words.json"
+    if os.path.exists(split):  # mic + Discord transcribed separately: the speaker comes from the track
+        cards = words_to_cards_split(load_split_words(split))
+    else:
+        cards = words_to_cards(load_words(f"{shorts_dir}\\{name}_track0_words.json"))
     json.dump(cards, open(out_path, "w", encoding="utf-8"), indent=2)
+    write_default_sidecar(out_path)
     total_dur = cards[-1]["end"] if cards else 0
     print(f"{name}: {len(cards)} cards, last card ends {total_dur:.1f}s")
 

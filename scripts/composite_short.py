@@ -5,7 +5,8 @@ Usage: python composite_short.py <clip_dir> [--words] [--no-zoom] [--punches 3.2
 <clip_dir> holds <clip>.mp4 (the 9:16 render), captions.json and, optionally, captions_speakers.json (the
 caption editor's sidecar). Writes <clip_dir>/<clip>_captioned.mp4, replacing any older one. Steps:
 
-1. auto_zoom.py: facecam zooms on laughs, following the face, plus a slow drift (--no-zoom skips; --punches adds moments)
+1. auto_zoom.py: facecam zooms only while the streamer's own mic is active, following the face, no drift. The mic comes
+   from the stream's job folder via <clip>_cut.json; with no cut or mic there's no auto zoom (--no-zoom skips; --punches adds moments)
 2. fetches any image/GIF links in the caption notes that aren't cached yet
 3. render_captions.py: phrase captions (two lines, spoken word lit) - --words keeps one word per card
 4. render_captions.py --voices-only: the "who's talking" layer, unless the sidecar says "voice_overlay": false
@@ -14,6 +15,7 @@ caption editor's sidecar). Writes <clip_dir>/<clip>_captioned.mp4, replacing any
 7. apply_trims.py, when the sidecar has "trims"
 """
 from local_paths import streaming
+import glob
 import hashlib
 import io
 import json
@@ -26,10 +28,12 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import wave
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import render_captions as rc  # noqa: E402
+import censor_noise  # noqa: E402
 import short_layout  # noqa: E402
 from media_info import video_fps  # noqa: E402
 from caption_fx import fx_from_note  # noqa: E402
@@ -37,6 +41,38 @@ from caption_fx import fx_from_note  # noqa: E402
 VENV_PY = os.path.join(os.path.expanduser("~"), ".cache", "video-editor", "whisperx-venv", "Scripts", "python.exe")
 HANDLE_GIF = streaming(r"Overlays + Images\Video Overlays\bold\handle-pop.gif")  # see the handle pop-up memory
 POPUP_W, POPUP_S = 396, 4.96  # centre comes from the layout (short_layout.py)
+JOBS_DIR = streaming(r"video-editor-projects")
+MIC_SR = 16000
+
+
+def cut_mic(clip_dir, out):
+    """Write the streamer's mic (OBS track 2), cut to the clip's timeline, to the wav <out>. <clip_dir> is
+    Videos\\<MM-DD-YYYY> - <Game>\\Clips\\<clip>; its cut list and mic live in the stream's job folder. False if either is missing."""
+    name = os.path.basename(clip_dir)
+    date = os.path.basename(os.path.dirname(os.path.dirname(clip_dir))).split(" - ")[0]
+    job = os.path.join(JOBS_DIR, f"stream-{date}-vod")
+    cut_path = os.path.join(job, "shorts", name + "_cut.json")
+    if not os.path.exists(cut_path):
+        return False
+    cut = json.load(open(cut_path, encoding="utf-8"))
+    fps, rows = cut.get("fps", 30), cut["cut"]
+    pcm = bytearray(int(max(r[1] for r in rows) / fps * MIC_SR) * 2)
+    for row in rows:
+        rec, rec_end, src = row[:3]
+        mics = glob.glob(os.path.join(job, "raw", f"part{row[3]}_track2.m4a" if len(row) > 3 else "*_track2.m4a"))
+        if len(mics) != 1:
+            return False
+        raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-ss", f"{src / fps:.3f}", "-t", f"{(rec_end - rec) / fps:.3f}", "-i", mics[0],
+                              "-ac", "1", "-ar", str(MIC_SR), "-f", "s16le", "-"], capture_output=True, check=True).stdout
+        at = int(rec / fps * MIC_SR) * 2
+        raw = raw[:len(pcm) - at]
+        pcm[at:at + len(raw)] = raw
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(MIC_SR)
+        w.writeframes(bytes(pcm))
+    return True
 
 
 def duration(path):
@@ -187,6 +223,8 @@ def main():
     dur = duration(clip)
     fps = video_fps(clip)
     cards = json.load(open(captions, encoding="utf-8"))
+    if not isinstance(cards, list) or not all(isinstance(c, dict) for c in cards):
+        sys.exit(f"{captions} isn't a list of caption cards (it may have been overwritten by the speakers file).")
     py = VENV_PY if os.path.exists(VENV_PY) else sys.executable
     lay = short_layout.layout(sidecar)
     popup_cx, popup_cy = lay["popup"]
@@ -195,11 +233,34 @@ def main():
         base = clip
         step(1, "zoom")
         if "--no-zoom" not in args:
-            base = os.path.join(tmp, "zoom.mp4")
-            zoom = [zoom_python(), os.path.join(HERE, "auto_zoom.py"), clip, base, "--panel", "%d:%d" % lay["panel"]]
-            if "--punches" in args:
-                zoom += ["--punches", args[args.index("--punches") + 1]]
-            run(zoom)
+            mic = os.path.join(tmp, "mic.wav")
+            has_mic = cut_mic(clip_dir, mic)
+            if has_mic or "--punches" in args:
+                base = os.path.join(tmp, "zoom.mp4")
+                if not has_mic:  # hand-placed punches only: a silent mic means no automatic zooms
+                    with wave.open(mic, "wb") as w:
+                        w.setnchannels(1), w.setsampwidth(2), w.setframerate(MIC_SR), w.writeframes(bytes(MIC_SR * 2))
+                zoom = [zoom_python(), os.path.join(HERE, "auto_zoom.py"), clip, base, "--panel", "%d:%d" % lay["panel"], "--voice", mic, "--no-drift"]
+                if "--punches" in args:
+                    zoom += ["--punches", args[args.index("--punches") + 1]]
+                run(zoom)
+            if not has_mic:
+                print("  zoom: no cut list or mic track found for this clip, so no automatic zoom", flush=True)
+
+        # censored words (starred / emoji cards): grunt over every one, blue "0" hitsplat on the facecam person's mouth
+        # for theirs only. "censor": false in the sidecar skips it (clips that already carry the grunt).
+        if "--no-censor" not in args and sidecar.get("censor") is not False:
+            audio_hits, splat_hits = censor_noise.hits_from_cards(cards, sidecar.get("facecam_speaker") or "Ben")
+            if audio_hits:
+                print(f"  censor: grunt on {len(audio_hits)} word(s), hitsplat on {len(splat_hits)}", flush=True)
+                covered = os.path.join(tmp, "censored.mp4")
+                censor_noise.apply(base, covered, audio_hits)
+                base = covered
+                if splat_hits:
+                    hits_json, splatted = os.path.join(tmp, "splat_hits.json"), os.path.join(tmp, "splat.mp4")
+                    json.dump(splat_hits, open(hits_json, "w"))
+                    run([zoom_python(), os.path.join(HERE, "hitsplat.py"), base, splatted, hits_json, "--panel", "%d:%d" % lay["panel"]])
+                    base = splatted
 
         step(2, "images")
         fetch_note_images(cards, clip_dir)

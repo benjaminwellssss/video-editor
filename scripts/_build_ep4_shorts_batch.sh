@@ -2,13 +2,13 @@
 set -e
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 STREAMING="$(python "$SCRIPTS/local_paths.py" | tr -d '\r')"
-PROJ="E:/video-editor-projects/valheimin-ep4-longplay-vod"
+PROJ="$STREAMING/video-editor-projects/valheimin-ep4-longplay-vod"
 SHORTS="$PROJ/shorts"
 WORDS="$PROJ/transcript/words.json"
-RAW="$STREAMING/Videos/VOD/2026-09-14 20-23-43-track0.mp4"
+RAW="$STREAMING/Videos/09-14-2026 - Valheim/VOD/2026-09-14 20-23-43-track0.mp4"
 HANDLE="$PROJ/graphics/handle.png"
 VENV_PY="$HOME/.cache/video-editor/whisperx-venv/Scripts/python.exe"
-OUTDIR="$STREAMING/Videos/CLIPS/09-14-2026_Valheim"
+OUTDIR="$STREAMING/Videos/09-14-2026 - Valheim/Clips"
 mkdir -p "$OUTDIR"
 
 if [ ! -f "$HANDLE" ]; then

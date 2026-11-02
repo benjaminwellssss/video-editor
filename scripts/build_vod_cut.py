@@ -2,7 +2,7 @@
 """Plan -> tightened segments -> SRT / metadata / Resolve clip_infos -> ffmpeg render.
 
 A "VOD-style" long-form cut: chronological ranges of one source recording, dead
-air between words trimmed, "fuck" variants excised at word level, and every
+air between words trimmed, swears left in (censor_noise.py covers them), and every
 deliverable (SRT, metadata with chapters, flagged-word report, Resolve
 clip_infos, finished MP4) derived from the same segment list.
 
@@ -15,13 +15,15 @@ Plan JSON keys:
     source         source video
     audio_stream   0-based index among the source's audio streams (default 0)
     fps            source frame rate (default: read from the source)
-    out_dir        deliverable folder (mp4 / srt / metadata land here)
+    out_dir        deliverable folder (mp4 / srt land here; metadata too, or in ../Metadata when this is a Videos folder)
     job_dir        where <name>_cut.json / clip_infos / flagged report are written
     work_dir       scratch for per-segment encodes (deleted after a good render)
     title, description, tags, hashtags
     gap_min / gap_keep / lead / tail   dead-air tightening (defaults 3.0 / 1.0->lead+tail)
-    excise         regexes of words to cut out (default: fuck variants)
-    ranges         [[start_s, end_s, "chapter label (optional)"], ...]
+    excise         regexes of words to cut out (default: none; swears are censored, not cut)
+    ranges         [[start_s, end_s, "chapter label (optional)", gap_min (optional)], ...]
+                   a per-range gap_min keeps silent gameplay (fights) that the plan-wide value would cut
+    audio          optional separate audio file (e.g. the levelled mix), same timeline as the source
     intro_card     optional {"png": transparent 1920x1080 text, "seconds": N}: the first N s of
                    the cut are blurred with the PNG on top (laid over the footage, so no timing shifts)
 """
@@ -37,7 +39,15 @@ from protected_names import is_cut
 
 FLAG_RE = re.compile(r"^(shit\w*|bullshit|ass|asses|bitch\w*|damn\w*|hell|pussy|tits?|crap|bastard\w*|dick\w*|piss\w*)$", re.I)
 SLUR_RE = re.compile(r"^(retard\w*|fag\w*|nigg\w*|chink\w*|spic\w*|kike\w*|tranny\w*)$", re.I)
-DEFAULT_EXCISE = [r"^f+u+c+k\w*$", r"^f\*+k\w*$"]
+DEFAULT_EXCISE = []  # swears are no longer cut (10-31): audio gets the censor grunt (censor_noise.py), text gets masked
+# damn/hell stay as spoken; everything else is grunted in audio and starred in captions
+CENSOR_RE = re.compile(r"^(shit\w*|bullshit|ass(es)?|bitch\w*|pussy|tits?|crap|bastard\w*|dick\w*|piss\w*|f+u+c+k\w*|f\*+k\w*)$", re.I)
+
+
+def mask(text):
+    """'Shit,' -> 's***,' : first letter kept, the rest starred, punctuation untouched."""
+    text = re.sub(r"\b(shuper|jared)\b", "the_shuper", text, flags=re.I)  # 10-31 rule: written/tagged as the_shuper
+    return re.sub(r"[A-Za-z*']+", lambda m: m.group(0)[0].lower() + "*" * (len(m.group(0)) - 1) if CENSOR_RE.match(m.group(0)) else m.group(0), text)
 
 
 def load_words(path):
@@ -62,6 +72,7 @@ def tighten(plan, words):
     for ri, rng in enumerate(plan["ranges"]):
         a, b = rng[0], rng[1]
         label = rng[2] if len(rng) > 2 else None
+        rgap = rng[3] if len(rng) > 3 else gap_min
         lo = bisect.bisect_left(starts, a)
         hi = bisect.bisect_left(starts, b)
         ws = words[lo:hi]
@@ -72,7 +83,7 @@ def tighten(plan, words):
         prev = ws[0]
         pieces = []
         for w in ws[1:]:
-            if w["start"] - prev["end"] > gap_min:
+            if w["start"] - prev["end"] > rgap:
                 pieces.append((cur_s, prev["end"] + tail))
                 cur_s = w["start"] - lead
             prev = w
@@ -136,7 +147,7 @@ def build_srt(tw, total):
     def flush():
         if not cur:
             return
-        text = " ".join(w["word"] for w in cur).strip()
+        text = mask(" ".join(w["word"] for w in cur).strip())
         if len(text) > 42:
             toks = text.split(" ")
             best, bi = 10**9, 1
@@ -199,8 +210,13 @@ def encode_segment(job):
     fade = 0.012
     af = f"afade=t=in:d={fade},afade=t=out:st={max(d-fade,0):.3f}:d={fade}"
     card_in, video_map = intro_card_args(plan, i)
+    if plan.get("audio"):
+        audio_in = ["-ss", f"{sg['start']:.3f}", "-t", f"{d:.3f}", "-i", plan["audio"]]
+        audio_map = ["-map", f"{1 + bool(card_in)}:a:0"]
+    else:
+        audio_in, audio_map = [], ["-map", f"0:a:{plan.get('audio_stream', 0)}"]
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{sg['start']:.3f}", "-t", f"{d:.3f}", "-i", plan["source"], *card_in,
-           *video_map, "-map", f"0:a:{plan.get('audio_stream', 0)}",
+           *audio_in, *video_map, *audio_map,
            "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "22", "-b:v", "0",
            "-maxrate", "12M", "-bufsize", "24M", "-g", "60", "-pix_fmt", "yuv420p", "-r", str(plan["fps"]),
            "-af", af, "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", str(out) + ".part.mkv"]
@@ -280,7 +296,10 @@ def main():
     (job / f"{name}_flagged_words.txt").write_text(
         "".join(f"{hms(t)}  {w}\n" for t, w in flagged) + ("\nSLURS:\n" + "".join(f"{hms(t)}  {w}\n" for t, w in slurs) if slurs else ""),
         encoding="utf8")
-    (out_dir / f"{plan['file_stem']}_metadata.txt").write_text(build_metadata(plan, segs, total, flagged), encoding="utf8")
+    # stream-date layout (10-30): <date folder>\Videos gets the video + srt, the metadata goes next door in Metadata
+    meta_dir = out_dir.parent / "Metadata" if out_dir.name == "Videos" else out_dir
+    meta_dir.mkdir(exist_ok=True)
+    (meta_dir / f"{plan['file_stem']}_metadata.txt").write_text(build_metadata(plan, segs, total, flagged), encoding="utf8")
     print(f"  srt cues {n}; flagged words {len(flagged)}; SLURS {len(slurs)}")
     if slurs:
         print("  !! slurs present in cut:", slurs)

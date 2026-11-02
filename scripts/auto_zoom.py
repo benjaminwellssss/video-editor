@@ -1,7 +1,7 @@
 """Dynamic camera for a finished 9:16 short: zooms in on the facecam when people laugh, following the face.
 
 Usage: python auto_zoom.py <clip.mp4> <out.mp4> [--captions captions.json] [--punches 3.2,10.5] [--no-drift] [--dry]
-                           [--frame 1920x1080 --zoom-scale 3] [--voice my_mic.wav]
+                           [--frame 1920x1080 --zoom-scale 3] [--voice my_mic.wav] [--panel 900:1020]
 
 Run it on the clip BEFORE the captions, voice overlay and handle pop-up go on. Needs OpenCV (cv2). No AI: it
 reads the clip's own audio and caption timings; the face is found with OpenCV's small YuNet model
@@ -37,6 +37,7 @@ from media_info import video_fps
 
 W, H, FPS = 1080, 1920, 30  # FPS is reset from the source clip in main()
 PANEL_H = 612                # facecam panel height in the 9:16 layout (the seam measures 612-616 on every 10-14 clip)
+PANEL_Y = 0                  # panel's top row; the cam_bottom layout passes --panel 900:1020 (see short_layout.py)
 DET_SCALE = 2                # face detection runs at 1/DET_SCALE size (full size with --frame: the facecam is small)
 ZOOM_SCALE = 1.0
 SR = 16000
@@ -216,7 +217,7 @@ def find_faces(path, n_frames):
         if fi % step:
             continue
         _, frame = cap.retrieve()
-        _, found = det.detect(cv2.resize(frame[:PANEL_H], (W // DET_SCALE, PANEL_H // DET_SCALE)))
+        _, found = det.detect(cv2.resize(frame[PANEL_Y:PANEL_Y + PANEL_H], (W // DET_SCALE, PANEL_H // DET_SCALE)))
         if found is not None:
             x, y, w, h = max(found, key=lambda f: f[2] * f[3])[:4] * DET_SCALE
             faces[fi / FPS] = (float(x + w / 2), float(y + h / 2), float(w))
@@ -270,7 +271,7 @@ def render(src, out, zooms, track):
             x, y, w, h = crop_box(z, *track[min(fi, len(track) - 1)])
             # sub-pixel crop + resize in one affine warp, so slow zooms don't jitter by whole pixels
             m = np.array([[w / W, 0, x], [0, h / PANEL_H, y]], np.float64)
-            frame[:PANEL_H] = cv2.warpAffine(frame[:PANEL_H], m, (W, PANEL_H),
+            frame[PANEL_Y:PANEL_Y + PANEL_H] = cv2.warpAffine(frame[PANEL_Y:PANEL_Y + PANEL_H], m, (W, PANEL_H),
                                              flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
         enc.stdin.write(frame.tobytes())
         fi += 1
@@ -280,8 +281,10 @@ def render(src, out, zooms, track):
 
 
 def main():
-    global W, H, FPS, PANEL_H, DET_SCALE, ZOOM_SCALE, HOLD_MAX_S, LAUGH_OUT_S
+    global W, H, FPS, PANEL_H, PANEL_Y, DET_SCALE, ZOOM_SCALE, HOLD_MAX_S, LAUGH_OUT_S
     args = sys.argv[1:]
+    if "--panel" in args:
+        PANEL_Y, PANEL_H = map(int, args[args.index("--panel") + 1].split(":"))
     if "--frame" in args:
         W, H = map(int, args[args.index("--frame") + 1].lower().split("x"))
         PANEL_H, DET_SCALE = H, 1
@@ -311,7 +314,8 @@ def main():
     if not captions:
         print("  (no captions.json found: talking can't be told from laughing, so laugh detection is rough)", flush=True)
     if "--voice" in args:
-        laughs, spikes = voice_zooms(loudness(args[args.index("--voice") + 1])), []
+        punches = [(float(v), float(v) + 1.0, LAUGH_ZOOM[1] * 0.8) for v in args[args.index("--punches") + 1].split(",") if v.strip()] if "--punches" in args else []
+        laughs, spikes = sorted(voice_zooms(loudness(args[args.index("--voice") + 1])) + punches), []
         HOLD_MAX_S, LAUGH_OUT_S = 1e9, VOICE_RELEASE_S
         print("voice zooms: " + ", ".join(f"{a:.1f}-{b:.1f}s +{z:.0%}" for a, b, z in laughs), flush=True)
     if "--dry" in args:
