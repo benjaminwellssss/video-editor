@@ -1,7 +1,9 @@
 ---
 name: stream-vod-edit
-description: Edit a local Twitch/streaming VOD into a full cleaned VOD, a 20-40 min highlight edit, and vertical 9:16 shorts with animated captions, on this specific Windows + DaVinci Resolve free-edition + WhisperX pipeline. Trigger on "edit this VOD/stream", "cut a highlight reel", "make shorts from this stream", or any request touching E:\Streaming\Videos. Covers file destinations/naming, caption styling, audio-track selection, and censoring rules learned the hard way on this rig.
+description: Edit a local Twitch/streaming VOD into a full cleaned VOD, a 20-40 min highlight edit, and vertical 9:16 shorts with animated captions, on this specific Windows + DaVinci Resolve free-edition + WhisperX pipeline. Trigger on "edit this VOD/stream", "cut a highlight reel", "make shorts from this stream", or any request touching <streaming-folder>\Videos. Covers file destinations/naming, caption styling, audio-track selection, and censoring rules learned the hard way on this rig.
 ---
+
+`<streaming-folder>` below is `streaming_root` in the git-ignored `local_paths.json`; `<repo>` is this repo and `<repos-folder>` is where the other repos live.
 
 # Stream VOD Edit
 
@@ -85,7 +87,7 @@ cheaper than diagnosing the symptom later.
 
 ## File destinations
 
-Everything lives under `E:\Streaming\Videos\`, which has four subfolders:
+Everything lives under `<streaming-folder>\Videos\`, which has four subfolders:
 
 | Subfolder | Contents |
 |---|---|
@@ -96,7 +98,7 @@ Everything lives under `E:\Streaming\Videos\`, which has four subfolders:
 
 **Folder-per-batch rule:** for every job, create one new dated folder in
 *each* subfolder you touch (not just `CLIPS`) — e.g. a VOD edit pass creates
-`E:\Streaming\Videos\VOD\09-09-2026_Valheim\`, the highlight reel creates the
+`<streaming-folder>\Videos\VOD\09-09-2026_Valheim\`, the highlight reel creates the
 matching folder under `EDITS`, and the shorts batch creates it under `CLIPS`.
 
 **Inside a `CLIPS` batch folder, confirmed 2026-09-18: every short gets its
@@ -145,7 +147,7 @@ different highlight cut, etc.), disambiguate with a trailing number:
 
 Working/scratch files (raw transcripts, intermediate ffmpeg renders, caption
 card JSON) stay under the project's own `projects/<job>/` tree per
-`CLAUDE.md` — those are not deliverables and don't need the `E:\Streaming`
+`CLAUDE.md` — those are not deliverables and don't need the `<streaming-folder>`
 naming convention, but keep them off `C:` too once they're multi-GB (see
 Non-negotiable 3).
 
@@ -540,7 +542,7 @@ default for every short and edit unless the user says to leave it off, and
 mention it when reporting a finished video so a missing one is noticed.
 
 - **Where video overlays live (user's decision, 2026-09-19):**
-  `E:\Streaming\Overlays + Images\Video Overlays\` — not in this repo. Look
+  `<streaming-folder>\Overlays + Images\Video Overlays\` — not in this repo. Look
   there first for any overlay; when the user adds a new one, that's where it
   belongs. Never leave it (or any asset a Resolve project links to) in
   Downloads: moving a linked file takes the media offline, so after moving
@@ -675,7 +677,7 @@ against the base clip, so the captions must be re-timed, not reused:
 
 ### Caption editor notes and effects (`*note*`, `|`)
 
-The user edits captions in their standalone editor (`E:\Coding Repos\
+The user edits captions in their standalone editor (`<repos-folder>\
 caption-editor\`, launched from the "Caption Editor" desktop shortcut). In a
 caption's text box (2026-09-19):
 
@@ -863,13 +865,13 @@ external path.
    {
      "mcpServers": {
        "davinci-resolve": {
-         "command": "C:\\Users\\Bem\\Desktop\\video-editor\\vendor\\davinci-resolve-mcp\\venv\\Scripts\\python.exe",
-         "args": ["C:\\Users\\Bem\\Desktop\\video-editor\\vendor\\davinci-resolve-mcp\\src\\server.py"],
+         "command": "<repo>\\vendor\\davinci-resolve-mcp\\venv\\Scripts\\python.exe",
+         "args": ["<repo>\\vendor\\davinci-resolve-mcp\\src\\server.py"],
          "env": {
            "RESOLVE_SCRIPT_API": "C:\\ProgramData\\Blackmagic Design\\DaVinci Resolve\\Support\\Developer\\Scripting",
            "RESOLVE_SCRIPT_LIB": "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\fusionscript.dll",
            "PYTHONPATH": "C:\\ProgramData\\Blackmagic Design\\DaVinci Resolve\\Support\\Developer\\Scripting\\Modules",
-           "PYTHONHOME": "C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.3824.0_x64__qbz5n2kfra8p0",
+           "PYTHONHOME": "<python-home>",
            "DAVINCI_RESOLVE_BRIDGE": "1"
          }
        }
@@ -891,7 +893,7 @@ external path.
    menu invocation that started it does not return. That's expected and
    correct. On this machine it shows up as a **`fuscript.exe`** child process
    of `Resolve.exe`.
-4. **Connection config**: `C:\Users\Bem\.config\davinci-resolve-mcp\bridge.json`
+4. **Connection config**: `~\.config\davinci-resolve-mcp\bridge.json`
    holds `host` (`127.0.0.1`), `port` (seen as `49632` on this machine, but
    don't hardcode it — always read this file), an auth `token`, and
    `allowed_media_roots` / `allowed_output_roots` path allowlists the bridge
@@ -1480,7 +1482,7 @@ here — this section covers everything else.
   timestamps reflecting the *final cut's* timeline (not the raw VOD's
   original timestamps — cuts shift everything downstream). **Save the
   `.srt` in the same dated folder as the main cut video itself**
-  (`E:\Streaming\Videos\EDITS\MM-DD-YYYY_GAME\`), named to match the video
+  (`<streaming-folder>\Videos\EDITS\MM-DD-YYYY_GAME\`), named to match the video
   file so the pairing is obvious.
 - **Every mid-length edit also gets a YouTube tag cloud** — a standing
   deliverable alongside the description and `.srt`, not a one-off ask.
@@ -1528,7 +1530,7 @@ here — this section covers everything else.
   broken (see the Resolve connection section above for the actual
   diagnostic steps).
 - **Watch for the destination folder moving out from under a job in
-  progress.** The user's own `E:\Streaming\...` structure has been
+  progress.** The user's own `<streaming-folder>\...` structure has been
   reorganized manually mid-session before (a folder moved to a new parent
   while renders targeting the old path were in flight). If a write fails
   with "no such file or directory" partway through a batch, check whether

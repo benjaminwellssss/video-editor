@@ -7,3 +7,6 @@ vendor/*/
 __pycache__/
 *.pyc
 CLAUDE.md
+
+# this machine's folders
+local_paths.json

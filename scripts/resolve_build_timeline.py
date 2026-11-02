@@ -24,7 +24,7 @@ import os
 import sys
 from pathlib import Path
 
-VENDOR_ROOT = Path(r"C:\Users\Bem\Desktop\video-editor\vendor\davinci-resolve-mcp")
+VENDOR_ROOT = Path(__file__).resolve().parent.parent / "vendor" / "davinci-resolve-mcp"
 sys.path.insert(0, str(VENDOR_ROOT))
 os.environ["DAVINCI_RESOLVE_BRIDGE"] = "1"
 

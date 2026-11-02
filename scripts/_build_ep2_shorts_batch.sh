@@ -1,13 +1,14 @@
 #!/bin/bash
 set -e
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+STREAMING="$(python "$SCRIPTS/local_paths.py" | tr -d '\r')"
 PROJ="E:/video-editor-projects/valheimin-ep3-longplay-vod"
 SHORTS="$PROJ/shorts"
 WORDS="$PROJ/transcript/words.json"
-RAW="E:/Streaming/Videos/VOD/2026-09-13 23-02-44.mp4"
+RAW="$STREAMING/Videos/VOD/2026-09-13 23-02-44.mp4"
 HANDLE="$PROJ/graphics/handle.png"
 VENV_PY="$HOME/.cache/video-editor/whisperx-venv/Scripts/python.exe"
-SCRIPTS="C:/Users/Bem/Desktop/video-editor/scripts"
-OUTDIR="E:/Streaming/Videos/CLIPS/09-13-2026_Valheim"
+OUTDIR="$STREAMING/Videos/CLIPS/09-13-2026_Valheim"
 
 declare -A DURS=(
   [vietnam_wall]=28.5
