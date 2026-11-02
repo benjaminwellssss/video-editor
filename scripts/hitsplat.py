@@ -104,6 +104,8 @@ def apply(src, dst, hits, panel=(0, PANEL_H)):
     enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     cap = cv2.VideoCapture(src)
     for i in range(n_total):
+        if i % max(1, n_total // 20) == 0:
+            print(f"frame {i}/{n_total}", flush=True)  # Cabtions' progress bar reads these
         ok, f = cap.read()
         if not ok:
             break

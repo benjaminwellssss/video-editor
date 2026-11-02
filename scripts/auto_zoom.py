@@ -202,6 +202,12 @@ def zoom_curve(n_frames, laughs, spikes, drift):
     return 1 + z * ZOOM_SCALE
 
 
+def report(done, total):
+    """Cabtions' progress bar reads these; about 20 lines per run, so its 200-line log keeps the step header."""
+    if done % max(1, total // 20) == 0:
+        print(f"frame {done}/{total}", flush=True)
+
+
 def find_faces(path, n_frames):
     """{time_s: (cx, cy, face_width)} for the biggest face in the panel, every FACE_EVERY_S."""
     import cv2
@@ -212,6 +218,7 @@ def find_faces(path, n_frames):
     cap = cv2.VideoCapture(path)
     faces = {}
     for fi in range(n_frames):
+        report(fi, 2 * n_frames)  # the face scan is the first half of the bar, the render the second
         if not cap.grab():
             break
         if fi % step:
@@ -274,6 +281,7 @@ def render(src, out, zooms, track):
             frame[PANEL_Y:PANEL_Y + PANEL_H] = cv2.warpAffine(frame[PANEL_Y:PANEL_Y + PANEL_H], m, (W, PANEL_H),
                                              flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
         enc.stdin.write(frame.tobytes())
+        report(len(zooms) + fi, 2 * len(zooms))
         fi += 1
     enc.stdin.close()
     if enc.wait() or dec.wait():

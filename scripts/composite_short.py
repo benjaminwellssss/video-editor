@@ -130,7 +130,7 @@ def popup_start(dur, spans):
     return min(free, key=lambda t: abs(t - target)) if free else max(0.0, target)
 
 
-STEPS = 6
+STEPS = 7
 
 
 WINDOW_RE = re.compile(r"\bblur\w*\b.*?\b(?:window|box|panel)\b.*?[\"“]([^\"”]+)[\"”]", re.I)
@@ -247,6 +247,7 @@ def main():
             if not has_mic:
                 print("  zoom: no cut list or mic track found for this clip, so no automatic zoom", flush=True)
 
+        step(2, "censor")
         # censored words (starred / emoji cards): grunt over every one, blue "0" hitsplat on the facecam person's mouth
         # for theirs only. "censor": false in the sidecar skips it (clips that already carry the grunt).
         if "--no-censor" not in args and sidecar.get("censor") is not False:
@@ -262,20 +263,20 @@ def main():
                     run([zoom_python(), os.path.join(HERE, "hitsplat.py"), base, splatted, hits_json, "--panel", "%d:%d" % lay["panel"]])
                     base = splatted
 
-        step(2, "images")
+        step(3, "images")
         fetch_note_images(cards, clip_dir)
-        step(3, "captions")
+        step(4, "captions")
         caps = os.path.join(tmp, "caps.mov")
         run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", caps, "--fps", str(fps)] + ([] if "--words" in args else ["--phrases"]))
 
-        step(4, "voice layer")
+        step(5, "voice layer")
         if sidecar.get("voice_overlay") is not False and any(c.get("speaker") for c in cards):
             voices = os.path.join(tmp, "voices.mov")
             run([py, os.path.join(HERE, "render_captions.py"), captions, f"{dur:.3f}", voices, "--voices-only", "--fps", str(fps)])
         else:
             voices = None
 
-        step(5, "composite")
+        step(6, "composite")
         t0 = popup_start(dur, image_spans(captions, dur))
         print(f"  handle pop-up at {t0:.1f}s", flush=True)
         inputs = ["-i", base, "-i", caps, "-itsoffset", f"{t0:.2f}", "-i", HANDLE_GIF]
@@ -315,7 +316,7 @@ def main():
              "-c:v", "h264_nvenc", "-preset", "p6", "-cq", "18", "-pix_fmt", "yuv420p", "-r", str(fps),
              *acodec, "-movflags", "+faststart", composed])
 
-        step(6, "trims")
+        step(7, "trims")
         if sidecar.get("trims"):
             run([sys.executable, os.path.join(HERE, "apply_trims.py"), composed, sidecar_path, out + ".tmp.mp4"])
         else:
